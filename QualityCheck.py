@@ -24,11 +24,16 @@ class QualityCheck:
                 Path(self.PATH[folder]).mkdir(parents=True, exist_ok=True)
                 
         # 로그 구성
-        self.logger=Logger(proc_name='Quality Check', log_folder_path = self.PATH['LOG'])
+        self.logger_save=True
+        self.logger=Logger(proc_name='Quality Check', log_folder_path = self.PATH['LOG'], save=self.logger_save)
         
         # Config 파일 불러오기
         with open(os.path.join(self.PATH['ROOT'], 'config.json'), 'r') as f:
             self.config=json.load(f)
+        
+        self.readFunc={}
+        self.readFunc['.csv']=pd.read_csv
+        self.readFunc['.xlsx']=pd.read_excel
         
     def data_check(self):
         # 데이터 존재 여부 확인
@@ -72,25 +77,91 @@ class QualityCheck:
         # 결측값 Custom 기능
         self.naList = self.config['naList']
         self.logger.info(f"현재 결측값으로 등록된 값은 다음과 같습니다.")
-        self.logger.info(f"{self.na_list}")
+        self.logger.info(f"{self.naList}")
         self.logger.info(f"결측값 추가 등록을 원하시면 config.json 파일 내 na_list 값에 추가 시 반영됩니다.")
         
     def run(self):
-        # QC 수행
         
+        # QC 수행
         self.logger.info(f"데이터 QC를 수행합니다.")
         
         # Step 1: 데이터 파일 불러오기
-        data_path=os.listdir(self.PATH['DATA'])[0]
-        ext=os.path.splitext(data)
+        data_path=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')][0]
+        ext=os.path.splitext(data_path)[-1]
         
-        if ext=='csv':
-            data=pd.read_csv()
+        data=self.readFunc[ext](os.path.join(self.PATH['DATA'], data_path), na_values=self.naList)
         
+        self.logger.info('='*50)
+        self.logger.info(f"{data_path} 파일 불러오기 성공")
+        self.logger.info(f"데이터 Shape:{data.shape}")
         
-        return
+        # Step 2: 결과 항목 값 세팅        
+        # MainCategory=['공통', '연속형', '범주형', '비고']
+        # SubCategory=['No.', '컬럼 영문명', '컬럼한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수',
+        #             '최솟값', '최댓값', '평균', '표준편차', '중위수',
+        #             '범주수', '범주', '%범주', '정의된 범주 외', '정의된 범주 외 수', '최빈값', '최빈값 수', '%최빈값',
+        #             '비고']
+        RelCategory={'공통': ['No.', '컬럼 영문명', '컬럼 한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수'],
+                    '연속형': ['최솟값', '최댓값', '평균', '표준편차', '중위수'],
+                    '범주형': ['범주수', '범주', '%범주', '정의된 범주 외', '정의된 범주 외 수', '최빈값', '최빈값 수', '%최빈값'],
+                    '비고': ['비고']}
+            
+        self.ResultDict={f'{idx:03d}': {'컬럼 영문명': col} for idx, col in enumerate(data.columns)}
+        
+        # Step 3-1: 공통 영역 QC 수행
+        for idx in self.ResultDict.keys():
+            col=self.ResultDict[idx]['컬럼 영문명']
+        
+            self.ResultDict[idx]['컬럼 한글명']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
+            self.ResultDict[idx]['데이터 타입']=data[col].dtypes.name # 데이터 타입
+            self.ResultDict[idx]['null 개수']='{:,}'.format(data[col].isnull().sum()) # null 개수
+            self.ResultDict[idx]['%null']='{:.2%}'.format(data[col].isnull().sum()/data.shape[0]) # %null
+            self.ResultDict[idx]['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
+            self.ResultDict[idx]['%적재건수']='{:.2%}'.format(data[col].notnull().sum()/data.shape[0]) # %적재건수
+        
+        # Step 3-2: 연속형 영역 QC 수행
+        for idx in self.ResultDict.keys():
+            if any(keyword in self.ResultDict[idx]['데이터 타입'] for keyword in ['float', 'int']):
+                col=self.ResultDict[idx]['컬럼 영문명']
+                
+                self.ResultDict[idx]['최솟값']=str(data[col].min()) # 최솟값
+                self.ResultDict[idx]['최댓값']=str(data[col].max()) # 최댓값
+                self.ResultDict[idx]['평균']=str(data[col].mean()) # 평균
+                self.ResultDict[idx]['표준편차']=str(data[col].std()) # 표준편차
+                self.ResultDict[idx]['중위수']=str(np.median(data[col])) # 표준편차
+        
+        # Step 3-3: 범주형 영역 QC 수행
+        for idx in self.ResultDict.keys():
+            if any(keyword in self.ResultDict[idx]['데이터 타입'] for keyword in ['object']):
+                col=self.ResultDict[idx]['컬럼 영문명']
+        
+                self.ResultDict[idx]['범주수']=data[col].nunique(dropna=True) # 범주수
+                if self.ResultDict[idx]['범주수'] <= 5:
+                    self.ResultDict[idx]['범주']=data[col].unique().tolist() # 범주
+                else: self.ResultDict[idx]['범주']=data[col].unique()[:2].tolist() + ['...'] + data[col].unique()[-2:].tolist() # 범주
+                # self.ResultDict[idx]['%범주']=str(data[col].mean()) # %범주
+                self.ResultDict[idx]['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
+                self.ResultDict[idx]['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
+                if len(data[col].mode(dropna=True).values.tolist()) <= 3:
+                    self.ResultDict[idx]['최빈값']=data[col].mode(dropna=True).values.tolist() # 최빈값
+                    self.ResultDict[idx]['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()} # 최빈값 수
+                    self.ResultDict[idx]['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()} # %최빈값
+                else:
+                    self.ResultDict[idx]['최빈값']=data[col].mode(dropna=True).values.tolist()[:2] + ['...'] # 최빈값
+                    self.ResultDict[idx]['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # 최빈값 수
+                    self.ResultDict[idx]['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # %최빈값
+        
+        # Step 3-4: 비고 영역 QC 수행
+        for idx in self.ResultDict.keys():
+            col=self.ResultDict[idx]['컬럼 영문명']
+        
+            self.ResultDict[idx]['비고']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
         
     def save(self):
+        
         # 결과 저장
         
-        return        
+        with open(os.path.join(self.PATH['OUTPUT'], 'QC결과서.json'), 'w') as f:
+            json.dump(self.ResultDict, f, ensure_ascii=False)
+        
+        return

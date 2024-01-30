@@ -5,7 +5,7 @@ from datetime import datetime
 
 # Logger 정의
 class Logger:
-    def __init__(self, file = sys.argv[0], proc_name = None, log_folder_path = None):
+    def __init__(self, file = sys.argv[0], proc_name = None, log_folder_path = None, save=True):
         self.today = datetime.today().strftime(format = '%Y%m%d')
         self.created_time=datetime.now().strftime(format='%Y%m%d_%H%M%S')
         self.file_name = os.path.basename(file)
@@ -23,13 +23,14 @@ class Logger:
             # StreamHandler
             stream_handler = logging.StreamHandler()
             stream_handler.setFormatter(formatter)
+            self.logger.addHandler(stream_handler)
             
             # FileHandler
-            file_handler = logging.FileHandler(self.log_path)
-            file_handler.setFormatter(formatter)
-
-            self.logger.addHandler(stream_handler)
-            self.logger.addHandler(file_handler)
+            if save==True:
+                file_handler = logging.FileHandler(self.log_path)
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+            
             self.logger.setLevel(logging.INFO)
 
     def info(self, value):

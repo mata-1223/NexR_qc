@@ -6,3 +6,5 @@ if __name__=='__main__':
     Process.data_check()
     Process.document_check()
     Process.na_check()
+    Process.run()
+    Process.save()
