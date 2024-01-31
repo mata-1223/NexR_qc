@@ -24,7 +24,7 @@ class QualityCheck:
                 Path(self.PATH[folder]).mkdir(parents=True, exist_ok=True)
                 
         # 로그 구성
-        self.logger_save=True
+        self.logger_save=False # 로그 파일 생성 여부 (True: 로그 파일 생성 / False: 로그 파일 미생성)
         self.logger=Logger(proc_name='Quality Check', log_folder_path = self.PATH['LOG'], save=self.logger_save)
         
         # Config 파일 불러오기
@@ -106,62 +106,91 @@ class QualityCheck:
                     '범주형': ['범주수', '범주', '%범주', '정의된 범주 외', '정의된 범주 외 수', '최빈값', '최빈값 수', '%최빈값'],
                     '비고': ['비고']}
             
-        self.ResultDict={f'{idx:03d}': {'컬럼 영문명': col} for idx, col in enumerate(data.columns)}
+        self.ResultDict={f'{idx:03d}': {'공통': {'No': f'{idx:03d}', '컬럼 영문명': col}} for idx, col in enumerate(data.columns)}
         
         # Step 3-1: 공통 영역 QC 수행
         for idx in self.ResultDict.keys():
-            col=self.ResultDict[idx]['컬럼 영문명']
+            col=self.ResultDict[idx]['공통']['컬럼 영문명']
         
-            self.ResultDict[idx]['컬럼 한글명']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
-            self.ResultDict[idx]['데이터 타입']=data[col].dtypes.name # 데이터 타입
-            self.ResultDict[idx]['null 개수']='{:,}'.format(data[col].isnull().sum()) # null 개수
-            self.ResultDict[idx]['%null']='{:.2%}'.format(data[col].isnull().sum()/data.shape[0]) # %null
-            self.ResultDict[idx]['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
-            self.ResultDict[idx]['%적재건수']='{:.2%}'.format(data[col].notnull().sum()/data.shape[0]) # %적재건수
+            self.ResultDict[idx]['공통']['컬럼 한글명']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
+            self.ResultDict[idx]['공통']['데이터 타입']=data[col].dtypes.name # 데이터 타입
+            self.ResultDict[idx]['공통']['null 개수']='{:,}'.format(data[col].isnull().sum()) # null 개수
+            self.ResultDict[idx]['공통']['%null']='{:.2%}'.format(data[col].isnull().sum()/data.shape[0]) # %null
+            self.ResultDict[idx]['공통']['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
+            self.ResultDict[idx]['공통']['%적재건수']='{:.2%}'.format(data[col].notnull().sum()/data.shape[0]) # %적재건수
         
         # Step 3-2: 연속형 영역 QC 수행
         for idx in self.ResultDict.keys():
-            if any(keyword in self.ResultDict[idx]['데이터 타입'] for keyword in ['float', 'int']):
-                col=self.ResultDict[idx]['컬럼 영문명']
+            self.ResultDict[idx]['연속형']={}
+            col=self.ResultDict[idx]['공통']['컬럼 영문명']
+            
+            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['float', 'int']):
                 
-                self.ResultDict[idx]['최솟값']=str(data[col].min()) # 최솟값
-                self.ResultDict[idx]['최댓값']=str(data[col].max()) # 최댓값
-                self.ResultDict[idx]['평균']=str(data[col].mean()) # 평균
-                self.ResultDict[idx]['표준편차']=str(data[col].std()) # 표준편차
-                self.ResultDict[idx]['중위수']=str(np.median(data[col])) # 표준편차
+                self.ResultDict[idx]['연속형']['최솟값']=str(data[col].min()) # 최솟값
+                self.ResultDict[idx]['연속형']['최댓값']=str(data[col].max()) # 최댓값
+                self.ResultDict[idx]['연속형']['평균']=str(data[col].mean()) # 평균
+                self.ResultDict[idx]['연속형']['표준편차']=str(data[col].std()) # 표준편차
+                self.ResultDict[idx]['연속형']['중위수']=str(np.median(data[col])) # 표준편차
+                
+            else:
+                self.ResultDict[idx]['연속형']['최솟값']=None # 최솟값
+                self.ResultDict[idx]['연속형']['최댓값']=None # 최댓값
+                self.ResultDict[idx]['연속형']['평균']=None # 평균
+                self.ResultDict[idx]['연속형']['표준편차']=None # 표준편차
+                self.ResultDict[idx]['연속형']['중위수']=None # 표준편차
         
         # Step 3-3: 범주형 영역 QC 수행
         for idx in self.ResultDict.keys():
-            if any(keyword in self.ResultDict[idx]['데이터 타입'] for keyword in ['object']):
-                col=self.ResultDict[idx]['컬럼 영문명']
+            self.ResultDict[idx]['범주형']={}
+            col=self.ResultDict[idx]['공통']['컬럼 영문명']
+            
+            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['object']):
         
-                self.ResultDict[idx]['범주수']=data[col].nunique(dropna=True) # 범주수
-                if self.ResultDict[idx]['범주수'] <= 5:
-                    self.ResultDict[idx]['범주']=data[col].unique().tolist() # 범주
-                else: self.ResultDict[idx]['범주']=data[col].unique()[:2].tolist() + ['...'] + data[col].unique()[-2:].tolist() # 범주
-                # self.ResultDict[idx]['%범주']=str(data[col].mean()) # %범주
-                self.ResultDict[idx]['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
-                self.ResultDict[idx]['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
-                if len(data[col].mode(dropna=True).values.tolist()) <= 3:
-                    self.ResultDict[idx]['최빈값']=data[col].mode(dropna=True).values.tolist() # 최빈값
-                    self.ResultDict[idx]['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()} # 최빈값 수
-                    self.ResultDict[idx]['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()} # %최빈값
+                self.ResultDict[idx]['범주형']['범주수']=data[col].nunique(dropna=True) # 범주수
+                if self.ResultDict[idx]['범주형']['범주수'] <= 5:
+                    self.ResultDict[idx]['범주형']['범주']=data[col].unique().tolist() # 범주
+                    self.ResultDict[idx]['범주형']['%범주']={value_: '{:.2%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique().tolist()} # %범주
                 else:
-                    self.ResultDict[idx]['최빈값']=data[col].mode(dropna=True).values.tolist()[:2] + ['...'] # 최빈값
-                    self.ResultDict[idx]['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # 최빈값 수
-                    self.ResultDict[idx]['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # %최빈값
+                    self.ResultDict[idx]['범주형']['범주']=data[col].unique()[:2].tolist() + ['...'] + data[col].unique()[-2:].tolist() # 범주
+                    self.ResultDict[idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique()[:5].tolist()} # %범주
+                    self.ResultDict[idx]['범주형']['%범주']['그 외']='{:.3%}'.format((data[col].loc[~(data[col].isin(data[col].unique()[:5].tolist()))].shape[0])/(data.shape[0]))
+                self.ResultDict[idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
+                self.ResultDict[idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
+                if len(data[col].mode(dropna=True).values.tolist()) <= 3:
+                    self.ResultDict[idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist() # 최빈값
+                    self.ResultDict[idx]['범주형']['최빈값 수']={mode_: '{:,}'.format(data[col].loc[data[col]==mode_].shape[0]) for mode_ in data[col].mode(dropna=True).values.tolist()} # 최빈값 수
+                    self.ResultDict[idx]['범주형']['%최빈값']={mode_: '{:.2%}'.format((data[col].loc[data[col]==mode_].shape[0])/(data.shape[0])) for mode_ in data[col].mode(dropna=True).values.tolist()} # %최빈값
+                else:
+                    self.ResultDict[idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist()[:2] + ['...'] # 최빈값
+                    self.ResultDict[idx]['범주형']['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # 최빈값 수
+                    self.ResultDict[idx]['범주형']['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # %최빈값
+                    
+            else:
+                self.ResultDict[idx]['범주형']['범주수']=None # 범주수
+                self.ResultDict[idx]['범주형']['범주']=None # 범주
+                self.ResultDict[idx]['범주형']['%범주']=None # %범주
+                self.ResultDict[idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외
+                self.ResultDict[idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수
+                self.ResultDict[idx]['범주형']['최빈값']=None # 최빈값
+                self.ResultDict[idx]['범주형']['최빈값 수']=None # 최빈값 수
+                self.ResultDict[idx]['범주형']['%최빈값']=None # %최빈값
+        
         
         # Step 3-4: 비고 영역 QC 수행
         for idx in self.ResultDict.keys():
-            col=self.ResultDict[idx]['컬럼 영문명']
+            self.ResultDict[idx]['비고']={}
+            col=self.ResultDict[idx]['공통']['컬럼 영문명']
         
-            self.ResultDict[idx]['비고']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
+            self.ResultDict[idx]['비고']['비고']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
         
     def save(self):
         
         # 결과 저장
         
+        # Step 1: Json 파일 저장
         with open(os.path.join(self.PATH['OUTPUT'], 'QC결과서.json'), 'w') as f:
             json.dump(self.ResultDict, f, ensure_ascii=False)
+            
+        # Step 2: Excel 파일 저장
         
         return
