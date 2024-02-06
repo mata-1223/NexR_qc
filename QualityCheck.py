@@ -29,6 +29,9 @@ class QualityCheck:
         self.logger_save=False # 로그 파일 생성 여부 (True: 로그 파일 생성 / False: 로그 파일 미생성)
         self.logger=Logger(proc_name='Quality Check', log_folder_path = self.PATH['LOG'], save=self.logger_save)
         
+        self.timer=Timer(logger=self.logger)
+        self.timer.start()
+        
         # Config 파일 불러오기
         with open(os.path.join(self.PATH['ROOT'], 'config.json'), 'r') as f:
             self.config=json.load(f)
@@ -38,21 +41,17 @@ class QualityCheck:
         self.readFunc['.xlsx']=pd.read_excel
         
     def data_check(self):
+        
         # 데이터 존재 여부 확인
-        # try:
-            # 데이터 파일 리스트 확인 (숨김파일 제거)
-        files=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')]
+        # 데이터 파일 리스트 확인 (숨김파일 제거)
+        self.files=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')]
         
         # 데이터 파일이 존재하지 않을 경우 에러 로그 기록
-        if len(files)==0:
+        if len(self.files)==0:
             self.logger.error(f"QC를 수행할 데이터 파일이 존재하지 않습니다.")
             return
             
-        self.logger.info(f"총 {len(files):,} 개의 데이터 파일이 존재합니다.")
-        # except Exception as e:
-        #     self.logger.error(e)
-        #     err_msg=traceback.format_exc()
-        #     self.logger.error(err_msg)            
+        self.logger.info(f"총 {len(self.files):,} 개의 데이터 파일이 존재합니다.")
             
     def document_check(self):
         # 정의서 파일 존재 여부 확인
@@ -69,7 +68,7 @@ class QualityCheck:
             self.logger.info(f"참고할 문서 파일이 {len(self.documents.keys())} 개 있습니다.")
             for k, v in self.documents.items():
                 self.logger.info(f"{k} 참고 문서 파일: {os.path.join(self.PATH['DOCS'], v[0])}")
-            
+                
     def dtype_check(self):
         # 데이터 타입 Custom 기능
         
@@ -89,6 +88,7 @@ class QualityCheck:
         
         # Step 1: 데이터 파일 불러오기
         data_path=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')][0]
+        dname=os.path.splitext(data_path)[0]
         ext=os.path.splitext(data_path)[-1]
         
         data=self.readFunc[ext](os.path.join(self.PATH['DATA'], data_path), na_values=self.naList)
@@ -97,7 +97,36 @@ class QualityCheck:
         self.logger.info(f"{data_path} 파일 불러오기 성공")
         self.logger.info(f"데이터 Shape:{data.shape}")
         
-        # Step 2: 결과 항목 값 세팅        
+        
+        # Step 2: 정의서 문서 파일 불러오기
+        # 데이터 파일명 획득
+        self.filename=[os.path.splitext(file)[0].upper() for file in self.files]
+        
+        # 테이블 정의서 정보 획득
+        TableInfoPath=os.path.join(self.PATH['DOCS'], self.documents['테이블정의서'][0])
+        ext=os.path.splitext(self.documents['테이블정의서'][0])[-1]
+        TableInfoDF=self.readFunc[ext](TableInfoPath, header=1)
+        self.TableInfoDict={}
+        
+        File=self.filename[0]
+        self.TableInfoDict[File]={}
+        if File in TableInfoDF['테이블 영문명'].values:
+            self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재합니다.')
+            self.TableInfoDict[File]['스키마명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '스키마명'].values[0]
+            self.TableInfoDict[File]['테이블 영문명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '테이블 영문명'].values[0]
+            self.TableInfoDict[File]['테이블 한글명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '테이블 한글명'].values[0]
+        else:
+            self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
+            self.TableInfoDict[File]['스키마명']=None
+            self.TableInfoDict[File]['테이블 영문명']=File
+            self.TableInfoDict[File]['테이블 한글명']=None
+        self.TableInfoDict[File]['테이블 용량']=None
+        self.TableInfoDict[File]['테이블 기간']=data.shape
+        self.TableInfoDict[File]['테이블 크기']=None
+        
+        self.TableInfo=pd.DataFrame(self.TableInfoDict[File].values(), index=[['스키마명', '테이블 영문명', '테이블 한글명', '테이블 상세', '테이블 상세', '테이블 상세'], ['스키마명', '테이블 영문명', '테이블 한글명', '테이블 용량', '테이블 기간', '테이블 크기']])
+        
+        # Step 3: 결과 항목 값 세팅        
         self.RelCategory={'공통': ['No', '컬럼 영문명', '컬럼 한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수'],
                     '연속형': ['최솟값', '최댓값', '평균', '표준편차', '중위수'],
                     '범주형': ['범주수', '범주', '%범주', '정의된 범주 외', '정의된 범주 외 수', '최빈값', '최빈값 수', '%최빈값'],
@@ -105,7 +134,7 @@ class QualityCheck:
             
         self.ResultDict={f'{idx:03d}': {'공통': {'No': f'{idx:03d}', '컬럼 영문명': col}} for idx, col in enumerate(data.columns)}
         
-        # Step 3-1: 공통 영역 QC 수행
+        # Step 4-1: 공통 영역 QC 수행
         for idx in self.ResultDict.keys():
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
         
@@ -116,7 +145,7 @@ class QualityCheck:
             self.ResultDict[idx]['공통']['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
             self.ResultDict[idx]['공통']['%적재건수']='{:.2%}'.format(data[col].notnull().sum()/data.shape[0]) # %적재건수
         
-        # Step 3-2: 연속형 영역 QC 수행
+        # Step 4-2: 연속형 영역 QC 수행
         for idx in self.ResultDict.keys():
             self.ResultDict[idx]['연속형']={}
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
@@ -136,7 +165,7 @@ class QualityCheck:
                 self.ResultDict[idx]['연속형']['표준편차']=None # 표준편차
                 self.ResultDict[idx]['연속형']['중위수']=None # 표준편차
         
-        # Step 3-3: 범주형 영역 QC 수행
+        # Step 4-3: 범주형 영역 QC 수행
         for idx in self.ResultDict.keys():
             self.ResultDict[idx]['범주형']={}
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
@@ -173,7 +202,7 @@ class QualityCheck:
                 self.ResultDict[idx]['범주형']['%최빈값']=None # %최빈값
         
         
-        # Step 3-4: 비고 영역 QC 수행
+        # Step 4-4: 비고 영역 QC 수행
         for idx in self.ResultDict.keys():
             self.ResultDict[idx]['비고']={}
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
@@ -216,13 +245,17 @@ class QualityCheck:
             ResultList.append(ResultList_)
         
         ResultDoc=pd.DataFrame(ResultList, columns=ColList)
-        ResultDoc.to_excel(OutputPath, sheet_name='Table1', index=True, header=True)
+        # ResultDoc.to_excel(OutputPath, sheet_name='Table1', index=True, header=True)
         
-        # # 저장한 Excel 파일 편집 
+        with pd.ExcelWriter(OutputPath, mode='w', engine='openpyxl') as writer:
+            self.TableInfo.to_excel(writer, index=True, header=False, sheet_name=self.filename[0], startcol=1, startrow=1)
+            ResultDoc.to_excel(writer, index=True, header=True, sheet_name=self.filename[0], startcol=0, startrow=9)
+            
+        # 저장한 Excel 파일 편집 
         wb=load_workbook(OutputPath)
         ws=wb.active
         
-        ws.delete_rows(3)
+        ws.delete_rows(12)
         ws.delete_cols(1)
 
         for mcr in ws.merged_cells:
@@ -233,9 +266,38 @@ class QualityCheck:
                 
         thin = Side(border_style="thin", color="000000")
         
+        ws.merge_cells(start_row=1, end_row=1, start_column=1, end_column=2)
+        ws.cell(row=1, column=1).value='테이블 정보'
+        ws.cell(row=1, column=1).font=Font(bold=True, color="ffffff")
+        ws.cell(row=1, column=1).fill=PatternFill("solid", fgColor="000000")
+        ws.cell(row=1, column=1).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=1, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        
+        ws.merge_cells(start_row=9, end_row=9, start_column=1, end_column=2)
+        ws.cell(row=9, column=1).value='컬럼 정보'
+        ws.cell(row=9, column=1).font=Font(bold=True, color="ffffff")
+        ws.cell(row=9, column=1).fill=PatternFill("solid", fgColor="000000")
+        ws.cell(row=9, column=1).alignment = Alignment(horizontal='center', vertical='center')
+        ws.cell(row=9, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        
+        for cell_ in ws['A2':'B7']:
+            for cell in cell_:
+                cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        for cell_ in ws['B5':'B7']:
+            for cell in cell_:
+                cell.fill = PatternFill("solid", fgColor="d9d9d9")
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        for cell_ in ws['C2':'C7']:
+            for cell in cell_:
+                cell.alignment = Alignment(vertical='center')
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+        
         for i_, row in enumerate(ws.rows):
             for cell_ in row:
-                if i_==0:
+                if i_==9:
                     if cell_.value in ['공통']:
                         cell=ws[cell_.coordinate]
                         cell.fill = PatternFill("solid", fgColor="bfbfbf")
@@ -253,7 +315,7 @@ class QualityCheck:
                         cell=ws[cell_.coordinate]
                         cell.fill = PatternFill("solid", fgColor="bfbfbf")
                         cell.alignment = Alignment(horizontal='center', vertical='center')
-                elif i_==1:
+                elif i_==10:
                     if cell_.value in self.RelCategory['공통'] + self.RelCategory['비고']:
                         cell=ws[cell_.coordinate]
                         cell.fill = PatternFill("solid", fgColor="d9d9d9")
@@ -266,11 +328,13 @@ class QualityCheck:
                         cell=ws[cell_.coordinate]
                         cell.fill = PatternFill("solid", fgColor="bdd7ee")
                         cell.alignment = Alignment(horizontal='center', vertical='center')
-                else:
+                elif i_>=11:
                     cell=ws[cell_.coordinate]
                     cell.alignment = Alignment(vertical='center', wrap_text=True)
-                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+                    cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
         
         ColumnDimension(ws, bestFit=True)
         
         wb.save(OutputPath)
+        
+        self.timer.stop()

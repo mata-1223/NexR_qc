@@ -25,6 +25,6 @@ class Timer:
         
         self._start_time = None
         if self.logger:
-            self.logger.info(f"Elapsed time: {elapsed_time} seconds")
+            self.logger.info(f"소요시간: {elapsed_time}")
         else:
-            print(f"Elapsed time: {elapsed_time} seconds")
+            print(f"소요시간: {elapsed_time}")
