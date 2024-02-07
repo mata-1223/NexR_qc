@@ -101,6 +101,7 @@ class QualityCheck:
         # Step 2: 정의서 문서 파일 불러오기
         # 데이터 파일명 획득
         self.filename=[os.path.splitext(file)[0].upper() for file in self.files]
+        File=self.filename[0]
         
         # 테이블 정의서 정보 획득
         TableInfoPath=os.path.join(self.PATH['DOCS'], self.documents['테이블정의서'][0])
@@ -108,7 +109,6 @@ class QualityCheck:
         TableInfoDF=self.readFunc[ext](TableInfoPath, header=1)
         self.TableInfoDict={}
         
-        File=self.filename[0]
         self.TableInfoDict[File]={}
         if File in TableInfoDF['테이블 영문명'].values:
             self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재합니다.')
@@ -125,6 +125,32 @@ class QualityCheck:
         self.TableInfoDict[File]['테이블 크기']=None
         
         self.TableInfo=pd.DataFrame(self.TableInfoDict[File].values(), index=[['스키마명', '테이블 영문명', '테이블 한글명', '테이블 상세', '테이블 상세', '테이블 상세'], ['스키마명', '테이블 영문명', '테이블 한글명', '테이블 용량', '테이블 기간', '테이블 크기']])
+        
+        # 컬럼 정의서 정보 획득
+        ColumnInfoPath=os.path.join(self.PATH['DOCS'], self.documents['컬럼정의서'][0])
+        ext=os.path.splitext(self.documents['컬럼정의서'][0])[-1]
+        ColumnInfoDF=self.readFunc[ext](ColumnInfoPath, header=1)
+        self.ColumnInfoDict={}
+        
+        self.ColumnInfoDict[File]={}
+        if File in ColumnInfoDF['테이블 영문명'].values:
+            self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재합니다.')
+            ColumnInfoDF_=ColumnInfoDF.loc[ColumnInfoDF['테이블 영문명']==File, :]
+            ColumnInfoDF_.columns=map(lambda x: x.replace('\n', ' '), list(ColumnInfoDF_.columns))
+            for col in data.columns:
+                self.ColumnInfoDict[File][col]={}
+                if col.upper() in ColumnInfoDF_.loc[:, '컬럼 영문명'].values:
+                    self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재합니다.')
+                    self.ColumnInfoDict[File][col]['컬럼 영문명']=col
+                    self.ColumnInfoDict[File][col]['컬럼 한글명']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '컬럼 한글명'].values[0]
+                    self.ColumnInfoDict[File][col]['데이터 타입']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '데이터 타입'].values[0]
+                else:
+                    self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재하지 않습니다.')
+                    self.ColumnInfoDict[File][col]['컬럼 영문명']=col
+                    self.ColumnInfoDict[File][col]['컬럼 한글명']=None
+                    self.ColumnInfoDict[File][col]['데이터 타입']=None
+        else:
+            self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
         
         # Step 3: 결과 항목 값 세팅        
         self.RelCategory={'공통': ['No', '컬럼 영문명', '컬럼 한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수'],
