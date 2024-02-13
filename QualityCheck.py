@@ -88,7 +88,6 @@ class QualityCheck:
         
         # Step 1: 데이터 파일 불러오기
         data_path=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')][0]
-        dname=os.path.splitext(data_path)[0]
         ext=os.path.splitext(data_path)[-1]
         
         data=self.readFunc[ext](os.path.join(self.PATH['DATA'], data_path), na_values=self.naList)
@@ -121,36 +120,55 @@ class QualityCheck:
             self.TableInfoDict[File]['테이블 영문명']=File
             self.TableInfoDict[File]['테이블 한글명']=None
         self.TableInfoDict[File]['테이블 용량']=None
-        self.TableInfoDict[File]['테이블 기간']=data.shape
-        self.TableInfoDict[File]['테이블 크기']=None
+        self.TableInfoDict[File]['테이블 기간']=None
+        self.TableInfoDict[File]['테이블 크기']=data.shape
         
         self.TableInfo=pd.DataFrame(self.TableInfoDict[File].values(), index=[['스키마명', '테이블 영문명', '테이블 한글명', '테이블 상세', '테이블 상세', '테이블 상세'], ['스키마명', '테이블 영문명', '테이블 한글명', '테이블 용량', '테이블 기간', '테이블 크기']])
         
-        # 컬럼 정의서 정보 획득
-        ColumnInfoPath=os.path.join(self.PATH['DOCS'], self.documents['컬럼정의서'][0])
-        ext=os.path.splitext(self.documents['컬럼정의서'][0])[-1]
-        ColumnInfoDF=self.readFunc[ext](ColumnInfoPath, header=1)
-        self.ColumnInfoDict={}
+        # 컬럼 정의서 & 코드 정의서 정보 획득
+        if '코드정의서' in self.documents.keys():
+            CodeInfoPath=os.path.join(self.PATH['DOCS'], self.documents['코드정의서'][0])
+            ext=os.path.splitext(self.documents['코드정의서'][0])[-1]
+            CodeInfoDF=self.readFunc[ext](CodeInfoPath, header=1)
+            CodeInfoDF.columns=map(lambda x: x.replace('\n', ' '), list(CodeInfoDF.columns))
+            CodeValueList=[val for val in CodeInfoDF.loc[:, '코드 대분류'].drop_duplicates().values if val is not np.nan]
+            
+        if '컬럼정의서' in self.documents.keys():
+            ColumnInfoPath=os.path.join(self.PATH['DOCS'], self.documents['컬럼정의서'][0])
+            ext=os.path.splitext(self.documents['컬럼정의서'][0])[-1]
+            ColumnInfoDF=self.readFunc[ext](ColumnInfoPath, header=1)
+            self.ColumnInfoDict={}
+            
+            self.ColumnInfoDict[File]={}
+            if File in ColumnInfoDF['테이블 영문명'].values:
+                self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재합니다.')
+                ColumnInfoDF_=ColumnInfoDF.loc[ColumnInfoDF['테이블 영문명']==File, :]
+                ColumnInfoDF_.columns=map(lambda x: x.replace('\n', ' '), list(ColumnInfoDF_.columns))
+                for col in data.columns:
+                    self.ColumnInfoDict[File][col]={}
+                    if col.upper() in ColumnInfoDF_.loc[:, '컬럼 영문명'].values:
+                        self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재합니다.')
+                        self.ColumnInfoDict[File][col]['컬럼 영문명']=col
+                        self.ColumnInfoDict[File][col]['컬럼 한글명']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '컬럼 한글명'].values[0]
+                        self.ColumnInfoDict[File][col]['데이터 타입']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '데이터 타입'].values[0]
+                        self.ColumnInfoDict[File][col]['코드대분류']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '코드대분류'].values[0]
+                        self.ColumnInfoDict[File][col]['코드값']=[val for val in CodeInfoDF.loc[CodeInfoDF['코드 대분류']==self.ColumnInfoDict[File][col]['코드대분류'], '코드값'].values if val is not np.nan] if self.ColumnInfoDict[File][col]['코드대분류'] in CodeValueList else None
+                    else:
+                        self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재하지 않습니다.')
+                        self.ColumnInfoDict[File][col]['컬럼 영문명']=col
+                        self.ColumnInfoDict[File][col]['컬럼 한글명']=None
+                        self.ColumnInfoDict[File][col]['데이터 타입']=None
+                        self.ColumnInfoDict[File][col]['코드대분류']=None
+                        self.ColumnInfoDict[File][col]['코드값']=None
+            else:
+                self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
+            
+            
+        # 코드 정의서 정보 획득
+        self.CodeInfoDict={}
         
-        self.ColumnInfoDict[File]={}
-        if File in ColumnInfoDF['테이블 영문명'].values:
-            self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재합니다.')
-            ColumnInfoDF_=ColumnInfoDF.loc[ColumnInfoDF['테이블 영문명']==File, :]
-            ColumnInfoDF_.columns=map(lambda x: x.replace('\n', ' '), list(ColumnInfoDF_.columns))
-            for col in data.columns:
-                self.ColumnInfoDict[File][col]={}
-                if col.upper() in ColumnInfoDF_.loc[:, '컬럼 영문명'].values:
-                    self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재합니다.')
-                    self.ColumnInfoDict[File][col]['컬럼 영문명']=col
-                    self.ColumnInfoDict[File][col]['컬럼 한글명']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '컬럼 한글명'].values[0]
-                    self.ColumnInfoDict[File][col]['데이터 타입']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '데이터 타입'].values[0]
-                else:
-                    self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재하지 않습니다.')
-                    self.ColumnInfoDict[File][col]['컬럼 영문명']=col
-                    self.ColumnInfoDict[File][col]['컬럼 한글명']=None
-                    self.ColumnInfoDict[File][col]['데이터 타입']=None
-        else:
-            self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
+        self.CodeInfoDict[File]={}
+        
         
         # Step 3: 결과 항목 값 세팅        
         self.RelCategory={'공통': ['No', '컬럼 영문명', '컬럼 한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수'],
@@ -164,8 +182,8 @@ class QualityCheck:
         for idx in self.ResultDict.keys():
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
         
-            self.ResultDict[idx]['공통']['컬럼 한글명']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
-            self.ResultDict[idx]['공통']['데이터 타입']=data[col].dtypes.name # 데이터 타입
+            self.ResultDict[idx]['공통']['컬럼 한글명']=self.ColumnInfoDict[File][col]['컬럼 한글명'] # 컬럼 한글명
+            self.ResultDict[idx]['공통']['데이터 타입']=self.ColumnInfoDict[File][col]['데이터 타입'] if self.ColumnInfoDict[File][col]['데이터 타입'] is not None else data[col].dtypes.name # 데이터 타입
             self.ResultDict[idx]['공통']['null 개수']='{:,}'.format(data[col].isnull().sum()) # null 개수
             self.ResultDict[idx]['공통']['%null']='{:.2%}'.format(data[col].isnull().sum()/data.shape[0]) # %null
             self.ResultDict[idx]['공통']['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
@@ -176,13 +194,13 @@ class QualityCheck:
             self.ResultDict[idx]['연속형']={}
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
             
-            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['float', 'int']):
+            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['float', 'int', 'numeric']):
                 
                 self.ResultDict[idx]['연속형']['최솟값']=str(data[col].min()) # 최솟값
                 self.ResultDict[idx]['연속형']['최댓값']=str(data[col].max()) # 최댓값
                 self.ResultDict[idx]['연속형']['평균']=str(data[col].mean()) # 평균
                 self.ResultDict[idx]['연속형']['표준편차']=str(data[col].std()) # 표준편차
-                self.ResultDict[idx]['연속형']['중위수']=str(np.median(data[col])) # 표준편차
+                self.ResultDict[idx]['연속형']['중위수']=str(np.nanmedian(data[col])) # 표준편차
                 
             else:
                 self.ResultDict[idx]['연속형']['최솟값']=None # 최솟값
@@ -196,18 +214,29 @@ class QualityCheck:
             self.ResultDict[idx]['범주형']={}
             col=self.ResultDict[idx]['공통']['컬럼 영문명']
             
-            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['object']):
+            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['object', 'char', 'varchar']):
         
                 self.ResultDict[idx]['범주형']['범주수']='{:,}'.format(data[col].nunique(dropna=True)) # 범주수
                 if data[col].nunique(dropna=True) <= 5:
                     self.ResultDict[idx]['범주형']['범주']=data[col].unique().tolist() # 범주
-                    self.ResultDict[idx]['범주형']['%범주']={value_: '{:.2%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique().tolist()} # %범주
+                    self.ResultDict[idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique().tolist()} # %범주
                 else:
                     self.ResultDict[idx]['범주형']['범주']=data[col].unique()[:2].tolist() + ['...'] + data[col].unique()[-2:].tolist() # 범주
                     self.ResultDict[idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique()[:5].tolist()} # %범주
                     self.ResultDict[idx]['범주형']['%범주']['그 외']='{:.3%}'.format((data[col].loc[~(data[col].isin(data[col].unique()[:5].tolist()))].shape[0])/(data.shape[0]))
-                self.ResultDict[idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
-                self.ResultDict[idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
+                if self.ColumnInfoDict[File][col]['코드값'] is not None:
+                    _=[val for val in self.ResultDict[idx]['범주형']['범주'] if val not in self.ColumnInfoDict[File][col]['코드값']]
+                    if len(_) > 5:
+                        self.ResultDict[idx]['범주형']['정의된 범주 외']=_[:2] + ['...'] + _[-2:]
+                    elif len(_) < 1:
+                        self.ResultDict[idx]['범주형']['정의된 범주 외']=None
+                    else:
+                        self.ResultDict[idx]['범주형']['정의된 범주 외']=_
+                    self.ResultDict[idx]['범주형']['정의된 범주 외 수']=len(_)
+                    
+                else:
+                    self.ResultDict[idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
+                    self.ResultDict[idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
                 if len(data[col].mode(dropna=True).values.tolist()) <= 3:
                     self.ResultDict[idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist() # 최빈값
                     self.ResultDict[idx]['범주형']['최빈값 수']={mode_: '{:,}'.format(data[col].loc[data[col]==mode_].shape[0]) for mode_ in data[col].mode(dropna=True).values.tolist()} # 최빈값 수
@@ -237,14 +266,13 @@ class QualityCheck:
             
     def convert_to_richtext(self, src):
         if type(src) is list:
-            tgt=',\n'.join(src)[:-1]
+            tgt=',\n'.join(src)
         elif type(src) is dict:
             tgt="\n".join("{}: {},".format(k, v) for k, v in src.items())[:-1]
             
         return tgt
         
     def save(self):
-        
         # 결과 저장
         
         # Step 1: Json 파일 저장
