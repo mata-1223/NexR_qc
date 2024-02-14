@@ -86,72 +86,85 @@ class QualityCheck:
         # QC 수행
         self.logger.info(f"데이터 QC를 수행합니다.")
         
+        self.ResultDict={}
+        self.TableInfo={}
+        
         # Step 1: 데이터 파일 불러오기
-        data_path=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')][0]
-        ext=os.path.splitext(data_path)[-1]
-        
-        data=self.readFunc[ext](os.path.join(self.PATH['DATA'], data_path), na_values=self.naList)
-        
         self.logger.info('='*50)
-        self.logger.info(f"{data_path} 파일 불러오기 성공")
-        self.logger.info(f"데이터 Shape:{data.shape}")
+        self.logger.info(f"Step1 데이터 파일을 불러옵니다.")
         
+        data_path=[file for file in os.listdir(self.PATH['DATA']) if not file.startswith('.')]
+        
+        DATADIR={}
+        for dpath in data_path:
+            dname=os.path.splitext(dpath)[0]
+            DATADIR[dname]={}
+            DATADIR[dname]['DPATH']=os.path.join(self.PATH['DATA'], dpath)
+            DATADIR[dname]['DNAME']=os.path.splitext(dpath)[0].upper() # 데이터 파일명
+            DATADIR[dname]['EXT']=os.path.splitext(dpath)[-1] # 데이터 파일 확장자
+            DATADIR[dname]['DATA']=self.readFunc[DATADIR[dname]['EXT']](os.path.join(self.PATH['DATA'], dpath), na_values=self.naList) # 데이터
+            
+            self.logger.info(f"{DATADIR[dname]['DNAME']} 파일 불러오기 성공")
+            self.logger.info(f"데이터 Shape:{DATADIR[dname]['DATA'].shape}")
+        
+        self.logger.info(f"Step1 완료")
+        self.logger.info('='*50)
         
         # Step 2: 정의서 문서 파일 불러오기
         # 데이터 파일명 획득
-        self.filename=[os.path.splitext(file)[0].upper() for file in self.files]
-        File=self.filename[0]
-        
-        # 테이블 정의서 정보 획득
-        TableInfoPath=os.path.join(self.PATH['DOCS'], self.documents['테이블정의서'][0])
-        ext=os.path.splitext(self.documents['테이블정의서'][0])[-1]
-        TableInfoDF=self.readFunc[ext](TableInfoPath, header=1)
-        self.TableInfoDict={}
-        
-        self.TableInfoDict[File]={}
-        if File in TableInfoDF['테이블 영문명'].values:
-            self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재합니다.')
-            self.TableInfoDict[File]['스키마명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '스키마명'].values[0]
-            self.TableInfoDict[File]['테이블 영문명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '테이블 영문명'].values[0]
-            self.TableInfoDict[File]['테이블 한글명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '테이블 한글명'].values[0]
-        else:
-            self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
-            self.TableInfoDict[File]['스키마명']=None
-            self.TableInfoDict[File]['테이블 영문명']=File
-            self.TableInfoDict[File]['테이블 한글명']=None
-        self.TableInfoDict[File]['테이블 용량']=None
-        self.TableInfoDict[File]['테이블 기간']=None
-        self.TableInfoDict[File]['테이블 크기']=data.shape
-        
-        self.TableInfo=pd.DataFrame(self.TableInfoDict[File].values(), index=[['스키마명', '테이블 영문명', '테이블 한글명', '테이블 상세', '테이블 상세', '테이블 상세'], ['스키마명', '테이블 영문명', '테이블 한글명', '테이블 용량', '테이블 기간', '테이블 크기']])
-        
-        # 컬럼 정의서 & 코드 정의서 정보 획득
-        if '코드정의서' in self.documents.keys():
-            CodeInfoPath=os.path.join(self.PATH['DOCS'], self.documents['코드정의서'][0])
-            ext=os.path.splitext(self.documents['코드정의서'][0])[-1]
-            CodeInfoDF=self.readFunc[ext](CodeInfoPath, header=1)
-            CodeInfoDF.columns=map(lambda x: x.replace('\n', ' '), list(CodeInfoDF.columns))
-            CodeValueList=[val for val in CodeInfoDF.loc[:, '코드 대분류'].drop_duplicates().values if val is not np.nan]
+        for dname in DATADIR.keys():
+            File=DATADIR[dname]['DNAME']
+            data=DATADIR[dname]['DATA']
             
-        if '컬럼정의서' in self.documents.keys():
-            ColumnInfoPath=os.path.join(self.PATH['DOCS'], self.documents['컬럼정의서'][0])
-            ext=os.path.splitext(self.documents['컬럼정의서'][0])[-1]
-            ColumnInfoDF=self.readFunc[ext](ColumnInfoPath, header=1)
-            self.ColumnInfoDict={}
+            # 테이블 정의서 정보 획득
+            TableInfoPath=os.path.join(self.PATH['DOCS'], self.documents['테이블정의서'][0])
+            ext=os.path.splitext(self.documents['테이블정의서'][0])[-1]
+            TableInfoDF=self.readFunc[ext](TableInfoPath, header=1)
+            self.TableInfoDict={}
             
-            self.ColumnInfoDict[File]={}
-            if File in ColumnInfoDF['테이블 영문명'].values:
-                self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재합니다.')
-                ColumnInfoDF_=ColumnInfoDF.loc[ColumnInfoDF['테이블 영문명']==File, :]
-                ColumnInfoDF_.columns=map(lambda x: x.replace('\n', ' '), list(ColumnInfoDF_.columns))
+            self.TableInfoDict[File]={}
+            if File in TableInfoDF['테이블 영문명'].values:
+                self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재합니다.')
+                self.TableInfoDict[File]['스키마명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '스키마명'].values[0]
+                self.TableInfoDict[File]['테이블 영문명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '테이블 영문명'].values[0]
+                self.TableInfoDict[File]['테이블 한글명']=TableInfoDF.loc[TableInfoDF['테이블 영문명']==File, '테이블 한글명'].values[0]
+            else:
+                self.logger.info(f'테이블 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
+                self.TableInfoDict[File]['스키마명']=None
+                self.TableInfoDict[File]['테이블 영문명']=File
+                self.TableInfoDict[File]['테이블 한글명']=None
+            self.TableInfoDict[File]['테이블 용량']=None
+            self.TableInfoDict[File]['테이블 기간']=None
+            self.TableInfoDict[File]['테이블 크기']=data.shape
+            
+            self.TableInfo[File]=pd.DataFrame(self.TableInfoDict[File].values(), index=[['스키마명', '테이블 영문명', '테이블 한글명', '테이블 상세', '테이블 상세', '테이블 상세'], ['스키마명', '테이블 영문명', '테이블 한글명', '테이블 용량', '테이블 기간', '테이블 크기']])
+            
+            # 컬럼 정의서 & 코드 정의서 정보 획득
+            if '코드정의서' in self.documents.keys():
+                CodeInfoPath=os.path.join(self.PATH['DOCS'], self.documents['코드정의서'][0])
+                ext=os.path.splitext(self.documents['코드정의서'][0])[-1]
+                CodeInfoDF=self.readFunc[ext](CodeInfoPath, header=1)
+                CodeInfoDF.columns=map(lambda x: x.replace('\n', ' '), list(CodeInfoDF.columns))
+                CodeValueList=[val for val in CodeInfoDF.loc[:, '코드 대분류'].drop_duplicates().values if val is not np.nan]
+                
+            if '컬럼정의서' in self.documents.keys():
+                ColumnInfoPath=os.path.join(self.PATH['DOCS'], self.documents['컬럼정의서'][0])
+                ext=os.path.splitext(self.documents['컬럼정의서'][0])[-1]
+                ColumnInfoDF=self.readFunc[ext](ColumnInfoPath, header=1)
+                ColumnInfoDF.columns=map(lambda x: x.replace('\n', ' '), list(ColumnInfoDF.columns))
+                ColumnInfoDF=ColumnInfoDF.loc[ColumnInfoDF['테이블 영문명']==File, :]
+                self.ColumnInfoDict={}
+                
+                self.ColumnInfoDict[File]={}
+                
                 for col in data.columns:
                     self.ColumnInfoDict[File][col]={}
-                    if col.upper() in ColumnInfoDF_.loc[:, '컬럼 영문명'].values:
+                    if col.upper() in ColumnInfoDF.loc[:, '컬럼 영문명'].values:
                         self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재합니다.')
                         self.ColumnInfoDict[File][col]['컬럼 영문명']=col
-                        self.ColumnInfoDict[File][col]['컬럼 한글명']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '컬럼 한글명'].values[0]
-                        self.ColumnInfoDict[File][col]['데이터 타입']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '데이터 타입'].values[0]
-                        self.ColumnInfoDict[File][col]['코드대분류']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '코드대분류'].values[0]
+                        self.ColumnInfoDict[File][col]['컬럼 한글명']=ColumnInfoDF.loc[ColumnInfoDF['컬럼 영문명']==col.upper(), '컬럼 한글명'].values[0]
+                        self.ColumnInfoDict[File][col]['데이터 타입']=ColumnInfoDF.loc[ColumnInfoDF['컬럼 영문명']==col.upper(), '데이터 타입'].values[0]
+                        self.ColumnInfoDict[File][col]['코드대분류']=ColumnInfoDF.loc[ColumnInfoDF['컬럼 영문명']==col.upper(), '코드대분류'].values[0]
                         self.ColumnInfoDict[File][col]['코드값']=[val for val in CodeInfoDF.loc[CodeInfoDF['코드 대분류']==self.ColumnInfoDict[File][col]['코드대분류'], '코드값'].values if val is not np.nan] if self.ColumnInfoDict[File][col]['코드대분류'] in CodeValueList else None
                     else:
                         self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재하지 않습니다.')
@@ -160,117 +173,144 @@ class QualityCheck:
                         self.ColumnInfoDict[File][col]['데이터 타입']=None
                         self.ColumnInfoDict[File][col]['코드대분류']=None
                         self.ColumnInfoDict[File][col]['코드값']=None
-            else:
-                self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
-            
-            
-        # 코드 정의서 정보 획득
-        self.CodeInfoDict={}
-        
-        self.CodeInfoDict[File]={}
-        
-        
-        # Step 3: 결과 항목 값 세팅        
-        self.RelCategory={'공통': ['No', '컬럼 영문명', '컬럼 한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수'],
-                    '연속형': ['최솟값', '최댓값', '평균', '표준편차', '중위수'],
-                    '범주형': ['범주수', '범주', '%범주', '정의된 범주 외', '정의된 범주 외 수', '최빈값', '최빈값 수', '%최빈값'],
-                    '비고': ['비고']}
-            
-        self.ResultDict={f'{idx:03d}': {'공통': {'No': f'{idx:03d}', '컬럼 영문명': col}} for idx, col in enumerate(data.columns)}
-        
-        # Step 4-1: 공통 영역 QC 수행
-        for idx in self.ResultDict.keys():
-            col=self.ResultDict[idx]['공통']['컬럼 영문명']
-        
-            self.ResultDict[idx]['공통']['컬럼 한글명']=self.ColumnInfoDict[File][col]['컬럼 한글명'] # 컬럼 한글명
-            self.ResultDict[idx]['공통']['데이터 타입']=self.ColumnInfoDict[File][col]['데이터 타입'] if self.ColumnInfoDict[File][col]['데이터 타입'] is not None else data[col].dtypes.name # 데이터 타입
-            self.ResultDict[idx]['공통']['null 개수']='{:,}'.format(data[col].isnull().sum()) # null 개수
-            self.ResultDict[idx]['공통']['%null']='{:.2%}'.format(data[col].isnull().sum()/data.shape[0]) # %null
-            self.ResultDict[idx]['공통']['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
-            self.ResultDict[idx]['공통']['%적재건수']='{:.2%}'.format(data[col].notnull().sum()/data.shape[0]) # %적재건수
-        
-        # Step 4-2: 연속형 영역 QC 수행
-        for idx in self.ResultDict.keys():
-            self.ResultDict[idx]['연속형']={}
-            col=self.ResultDict[idx]['공통']['컬럼 영문명']
-            
-            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['float', 'int', 'numeric']):
+                    
+                # if File in ColumnInfoDF['테이블 영문명'].values:
+                #     self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재합니다.')
+                #     ColumnInfoDF_=ColumnInfoDF.loc[ColumnInfoDF['테이블 영문명']==File, :]
+                #     ColumnInfoDF_.columns=map(lambda x: x.replace('\n', ' '), list(ColumnInfoDF_.columns))
+                #     for col in data.columns:
+                #         self.ColumnInfoDict[File][col]={}
+                #         if col.upper() in ColumnInfoDF_.loc[:, '컬럼 영문명'].values:
+                #             self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재합니다.')
+                #             self.ColumnInfoDict[File][col]['컬럼 영문명']=col
+                #             self.ColumnInfoDict[File][col]['컬럼 한글명']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '컬럼 한글명'].values[0]
+                #             self.ColumnInfoDict[File][col]['데이터 타입']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '데이터 타입'].values[0]
+                #             self.ColumnInfoDict[File][col]['코드대분류']=ColumnInfoDF_.loc[ColumnInfoDF_['컬럼 영문명']==col.upper(), '코드대분류'].values[0]
+                #             self.ColumnInfoDict[File][col]['코드값']=[val for val in CodeInfoDF.loc[CodeInfoDF['코드 대분류']==self.ColumnInfoDict[File][col]['코드대분류'], '코드값'].values if val is not np.nan] if self.ColumnInfoDict[File][col]['코드대분류'] in CodeValueList else None
+                #         else:
+                #             self.logger.info(f'컬럼 정의서에 {col} 컬럼 정보가 존재하지 않습니다.')
+                #             self.ColumnInfoDict[File][col]['컬럼 영문명']=col
+                #             self.ColumnInfoDict[File][col]['컬럼 한글명']=None
+                #             self.ColumnInfoDict[File][col]['데이터 타입']=None
+                #             self.ColumnInfoDict[File][col]['코드대분류']=None
+                #             self.ColumnInfoDict[File][col]['코드값']=None
+                # else:
+                #     self.logger.info(f'컬럼 정의서에 {File} 테이블 정보가 존재하지 않습니다.')
                 
-                self.ResultDict[idx]['연속형']['최솟값']=str(data[col].min()) # 최솟값
-                self.ResultDict[idx]['연속형']['최댓값']=str(data[col].max()) # 최댓값
-                self.ResultDict[idx]['연속형']['평균']=str(data[col].mean()) # 평균
-                self.ResultDict[idx]['연속형']['표준편차']=str(data[col].std()) # 표준편차
-                self.ResultDict[idx]['연속형']['중위수']=str(np.nanmedian(data[col])) # 표준편차
-                
-            else:
-                self.ResultDict[idx]['연속형']['최솟값']=None # 최솟값
-                self.ResultDict[idx]['연속형']['최댓값']=None # 최댓값
-                self.ResultDict[idx]['연속형']['평균']=None # 평균
-                self.ResultDict[idx]['연속형']['표준편차']=None # 표준편차
-                self.ResultDict[idx]['연속형']['중위수']=None # 표준편차
-        
-        # Step 4-3: 범주형 영역 QC 수행
-        for idx in self.ResultDict.keys():
-            self.ResultDict[idx]['범주형']={}
-            col=self.ResultDict[idx]['공통']['컬럼 영문명']
+            # 코드 정의서 정보 획득
+            # self.CodeInfoDict={}
             
-            if any(keyword in self.ResultDict[idx]['공통']['데이터 타입'] for keyword in ['object', 'char', 'varchar']):
-        
-                self.ResultDict[idx]['범주형']['범주수']='{:,}'.format(data[col].nunique(dropna=True)) # 범주수
-                if data[col].nunique(dropna=True) <= 5:
-                    self.ResultDict[idx]['범주형']['범주']=data[col].unique().tolist() # 범주
-                    self.ResultDict[idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique().tolist()} # %범주
+            # self.CodeInfoDict[File]={}
+            
+            
+            # Step 3: 결과 항목 값 세팅        
+            self.RelCategory={'공통': ['No', '컬럼 영문명', '컬럼 한글명', '데이터 타입', 'null 개수', '%null', '적재건수', '%적재건수'],
+                        '연속형': ['최솟값', '최댓값', '평균', '표준편차', '중위수'],
+                        '범주형': ['범주수', '범주', '%범주', '정의된 범주 외', '정의된 범주 외 수', '최빈값', '최빈값 수', '%최빈값'],
+                        '비고': ['비고']}
+                
+            self.ResultDict[File]={f'{idx:03d}': {'공통': {'No': f'{idx:03d}', '컬럼 영문명': col}} for idx, col in enumerate(data.columns)}
+            
+            # Step 4-1: 공통 영역 QC 수행
+            for idx in self.ResultDict[File].keys():
+                col=self.ResultDict[File][idx]['공통']['컬럼 영문명']
+            
+                self.ResultDict[File][idx]['공통']['컬럼 한글명']=self.ColumnInfoDict[File][col]['컬럼 한글명'] # 컬럼 한글명
+                self.ResultDict[File][idx]['공통']['데이터 타입']=self.ColumnInfoDict[File][col]['데이터 타입'] if self.ColumnInfoDict[File][col]['데이터 타입'] is not None else data[col].dtypes.name # 데이터 타입
+                self.ResultDict[File][idx]['공통']['null 개수']='{:,}'.format(data[col].isnull().sum()) # null 개수
+                self.ResultDict[File][idx]['공통']['%null']='{:.2%}'.format(data[col].isnull().sum()/data.shape[0]) # %null
+                self.ResultDict[File][idx]['공통']['적재건수']='{:,}'.format(data[col].notnull().sum()) # 적재건수
+                self.ResultDict[File][idx]['공통']['%적재건수']='{:.2%}'.format(data[col].notnull().sum()/data.shape[0]) # %적재건수
+            
+            # Step 4-2: 연속형 영역 QC 수행
+            for idx in self.ResultDict[File].keys():
+                self.ResultDict[File][idx]['연속형']={}
+                col=self.ResultDict[File][idx]['공통']['컬럼 영문명']
+                
+                if any(keyword in self.ResultDict[File][idx]['공통']['데이터 타입'] for keyword in ['float', 'int', 'numeric']):
+                    
+                    self.ResultDict[File][idx]['연속형']['최솟값']=str(data[col].min()) # 최솟값
+                    self.ResultDict[File][idx]['연속형']['최댓값']=str(data[col].max()) # 최댓값
+                    self.ResultDict[File][idx]['연속형']['평균']=str(data[col].mean()) # 평균
+                    self.ResultDict[File][idx]['연속형']['표준편차']=str(data[col].std()) # 표준편차
+                    self.ResultDict[File][idx]['연속형']['중위수']=str(np.nanmedian(data[col])) # 표준편차
+                    
                 else:
-                    self.ResultDict[idx]['범주형']['범주']=data[col].unique()[:2].tolist() + ['...'] + data[col].unique()[-2:].tolist() # 범주
-                    self.ResultDict[idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique()[:5].tolist()} # %범주
-                    self.ResultDict[idx]['범주형']['%범주']['그 외']='{:.3%}'.format((data[col].loc[~(data[col].isin(data[col].unique()[:5].tolist()))].shape[0])/(data.shape[0]))
-                if self.ColumnInfoDict[File][col]['코드값'] is not None:
-                    _=[val for val in self.ResultDict[idx]['범주형']['범주'] if val not in self.ColumnInfoDict[File][col]['코드값']]
-                    if len(_) > 5:
-                        self.ResultDict[idx]['범주형']['정의된 범주 외']=_[:2] + ['...'] + _[-2:]
-                    elif len(_) < 1:
-                        self.ResultDict[idx]['범주형']['정의된 범주 외']=None
+                    self.ResultDict[File][idx]['연속형']['최솟값']=None # 최솟값
+                    self.ResultDict[File][idx]['연속형']['최댓값']=None # 최댓값
+                    self.ResultDict[File][idx]['연속형']['평균']=None # 평균
+                    self.ResultDict[File][idx]['연속형']['표준편차']=None # 표준편차
+                    self.ResultDict[File][idx]['연속형']['중위수']=None # 표준편차
+            
+            # Step 4-3: 범주형 영역 QC 수행
+            for idx in self.ResultDict[File].keys():
+                self.ResultDict[File][idx]['범주형']={}
+                col=self.ResultDict[File][idx]['공통']['컬럼 영문명']
+                
+                if any(keyword in self.ResultDict[File][idx]['공통']['데이터 타입'] for keyword in ['object', 'char', 'varchar']):
+            
+                    self.ResultDict[File][idx]['범주형']['범주수']='{:,}'.format(data[col].nunique(dropna=True)) # 범주수
+                    if data[col].nunique(dropna=True) <= 5:
+                        self.ResultDict[File][idx]['범주형']['범주']=data[col].unique().tolist() # 범주
+                        self.ResultDict[File][idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique().tolist()} # %범주
                     else:
-                        self.ResultDict[idx]['범주형']['정의된 범주 외']=_
-                    self.ResultDict[idx]['범주형']['정의된 범주 외 수']=len(_)
-                    
+                        self.ResultDict[File][idx]['범주형']['범주']=data[col].unique()[:2].tolist() + ['...'] + data[col].unique()[-2:].tolist() # 범주
+                        self.ResultDict[File][idx]['범주형']['%범주']={value_: '{:.3%}'.format((data[col].loc[data[col]==value_].shape[0])/(data.shape[0])) for value_ in data[col].unique()[:5].tolist()} # %범주
+                        self.ResultDict[File][idx]['범주형']['%범주']['그 외']='{:.3%}'.format((data[col].loc[~(data[col].isin(data[col].unique()[:5].tolist()))].shape[0])/(data.shape[0]))
+                    if self.ColumnInfoDict[File][col]['코드값'] is not None:
+                        _=[val for val in self.ResultDict[File][idx]['범주형']['범주'] if val not in self.ColumnInfoDict[File][col]['코드값']]
+                        if len(_) > 5:
+                            self.ResultDict[File][idx]['범주형']['정의된 범주 외']=_[:2] + ['...'] + _[-2:]
+                        elif len(_) < 1:
+                            self.ResultDict[File][idx]['범주형']['정의된 범주 외']=None
+                        else:
+                            self.ResultDict[File][idx]['범주형']['정의된 범주 외']=_
+                        self.ResultDict[File][idx]['범주형']['정의된 범주 외 수']=len(_)
+                        
+                    else:
+                        self.ResultDict[File][idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
+                        self.ResultDict[File][idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
+                    if len(data[col].mode(dropna=True).values.tolist()) <= 3:
+                        self.ResultDict[File][idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist() # 최빈값
+                        self.ResultDict[File][idx]['범주형']['최빈값 수']={mode_: '{:,}'.format(data[col].loc[data[col]==mode_].shape[0]) for mode_ in data[col].mode(dropna=True).values.tolist()} # 최빈값 수
+                        self.ResultDict[File][idx]['범주형']['%최빈값']={mode_: '{:.2%}'.format((data[col].loc[data[col]==mode_].shape[0])/(data.shape[0])) for mode_ in data[col].mode(dropna=True).values.tolist()} # %최빈값
+                    else:
+                        self.ResultDict[File][idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist()[:2] + ['...'] # 최빈값
+                        self.ResultDict[File][idx]['범주형']['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # 최빈값 수
+                        self.ResultDict[File][idx]['범주형']['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # %최빈값
+                        
                 else:
-                    self.ResultDict[idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외 (정의서 정보 활용 내용 반영 예정)
-                    self.ResultDict[idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수 (정의서 정보 활용 내용 반영 예정)
-                if len(data[col].mode(dropna=True).values.tolist()) <= 3:
-                    self.ResultDict[idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist() # 최빈값
-                    self.ResultDict[idx]['범주형']['최빈값 수']={mode_: '{:,}'.format(data[col].loc[data[col]==mode_].shape[0]) for mode_ in data[col].mode(dropna=True).values.tolist()} # 최빈값 수
-                    self.ResultDict[idx]['범주형']['%최빈값']={mode_: '{:.2%}'.format((data[col].loc[data[col]==mode_].shape[0])/(data.shape[0])) for mode_ in data[col].mode(dropna=True).values.tolist()} # %최빈값
-                else:
-                    self.ResultDict[idx]['범주형']['최빈값']=data[col].mode(dropna=True).values.tolist()[:2] + ['...'] # 최빈값
-                    self.ResultDict[idx]['범주형']['최빈값 수']={mode_col: '{:,}'.format(data[col].loc[data[col]==mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # 최빈값 수
-                    self.ResultDict[idx]['범주형']['%최빈값']={mode_col: '{:.2%}'.format((data[col].loc[data[col]==mode_col].shape[0])/(data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]} # %최빈값
-                    
-            else:
-                self.ResultDict[idx]['범주형']['범주수']=None # 범주수
-                self.ResultDict[idx]['범주형']['범주']=None # 범주
-                self.ResultDict[idx]['범주형']['%범주']=None # %범주
-                self.ResultDict[idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외
-                self.ResultDict[idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수
-                self.ResultDict[idx]['범주형']['최빈값']=None # 최빈값
-                self.ResultDict[idx]['범주형']['최빈값 수']=None # 최빈값 수
-                self.ResultDict[idx]['범주형']['%최빈값']=None # %최빈값
-        
-        
-        # Step 4-4: 비고 영역 QC 수행
-        for idx in self.ResultDict.keys():
-            self.ResultDict[idx]['비고']={}
-            col=self.ResultDict[idx]['공통']['컬럼 영문명']
-        
-            self.ResultDict[idx]['비고']['비고']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
+                    self.ResultDict[File][idx]['범주형']['범주수']=None # 범주수
+                    self.ResultDict[File][idx]['범주형']['범주']=None # 범주
+                    self.ResultDict[File][idx]['범주형']['%범주']=None # %범주
+                    self.ResultDict[File][idx]['범주형']['정의된 범주 외']=None # 정의된 범주 외
+                    self.ResultDict[File][idx]['범주형']['정의된 범주 외 수']=None # 정의된 범주 외 수
+                    self.ResultDict[File][idx]['범주형']['최빈값']=None # 최빈값
+                    self.ResultDict[File][idx]['범주형']['최빈값 수']=None # 최빈값 수
+                    self.ResultDict[File][idx]['범주형']['%최빈값']=None # %최빈값
             
+            
+            # Step 4-4: 비고 영역 QC 수행
+            for idx in self.ResultDict[File].keys():
+                self.ResultDict[File][idx]['비고']={}
+                col=self.ResultDict[File][idx]['공통']['컬럼 영문명']
+            
+                self.ResultDict[File][idx]['비고']['비고']=None # 컬럼 한글명 (정의서 정보 활용 내용 반영 예정)
+                
     def convert_to_richtext(self, src):
         if type(src) is list:
-            tgt=',\n'.join(src)
+            try:
+                tgt=',\n'.join(src)
+            except TypeError:
+                tgt=',\n'.join(map(str, src))
         elif type(src) is dict:
-            tgt="\n".join("{}: {},".format(k, v) for k, v in src.items())[:-1]
+            try:
+                tgt="\n".join("{}: {},".format(k, v) for k, v in src.items())[:-1]
+            except TypeError:
+                tgt=',\n'.join(map(str, src))
             
         return tgt
+        
         
     def save(self):
         # 결과 저장
@@ -289,105 +329,109 @@ class QualityCheck:
         ColList=[SubCol1, SubCol2]
         OutputPath=os.path.join(self.PATH['OUTPUT'], 'QC결과서.xlsx')
         
-        ResultList=[]
+        ResultDocDict={}
         
-        for idx in self.ResultDict.keys():
-            ResultList_=[]
-            for key1 in self.ResultDict[idx]:
-                ResultList_+=[self.convert_to_richtext(self.ResultDict[idx][key1][key2]) if ((type(self.ResultDict[idx][key1][key2]) is list) or (type(self.ResultDict[idx][key1][key2]) is dict)) else self.ResultDict[idx][key1][key2] for key2 in self.ResultDict[idx][key1]]
+        for File in self.ResultDict.keys():
+            ResultList=[]
+            for idx in self.ResultDict[File].keys():
+                ResultList_=[]
+                for key1 in self.ResultDict[File][idx]:
+                    ResultList_+=[self.convert_to_richtext(self.ResultDict[File][idx][key1][key2]) if ((type(self.ResultDict[File][idx][key1][key2]) is list) or (type(self.ResultDict[File][idx][key1][key2]) is dict)) else self.ResultDict[File][idx][key1][key2] for key2 in self.ResultDict[File][idx][key1]]
                 
-            ResultList.append(ResultList_)
-        
-        ResultDoc=pd.DataFrame(ResultList, columns=ColList)
-        # ResultDoc.to_excel(OutputPath, sheet_name='Table1', index=True, header=True)
-        
+                ResultList.append(ResultList_)
+                
+            ResultDocDict[File]=pd.DataFrame(ResultList, columns=ColList)
+            
         with pd.ExcelWriter(OutputPath, mode='w', engine='openpyxl') as writer:
-            self.TableInfo.to_excel(writer, index=True, header=False, sheet_name=self.filename[0], startcol=1, startrow=1)
-            ResultDoc.to_excel(writer, index=True, header=True, sheet_name=self.filename[0], startcol=0, startrow=9)
+            for File in self.ResultDict.keys():
+                self.TableInfo[File].to_excel(writer, index=True, header=False, sheet_name=File, startcol=1, startrow=1)
+                ResultDocDict[File].to_excel(writer, index=True, header=True, sheet_name=File, startcol=0, startrow=9)
             
         # 저장한 Excel 파일 편집 
         wb=load_workbook(OutputPath)
-        ws=wb.active
         
-        ws.delete_rows(12)
-        ws.delete_cols(1)
+        for File in self.ResultDict.keys():
+            ws=wb[File]
+            
+            ws.delete_rows(12)
+            ws.delete_cols(1)
 
-        for mcr in ws.merged_cells:
-            if 1 < mcr.min_col:
-                mcr.shift(col_shift=-1)
-            elif 1 <= mcr.max_col:
-                mcr.shrink(right=1)
-                
-        thin = Side(border_style="thin", color="000000")
-        
-        ws.merge_cells(start_row=1, end_row=1, start_column=1, end_column=2)
-        ws.cell(row=1, column=1).value='테이블 정보'
-        ws.cell(row=1, column=1).font=Font(bold=True, color="ffffff")
-        ws.cell(row=1, column=1).fill=PatternFill("solid", fgColor="000000")
-        ws.cell(row=1, column=1).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=1, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
-        
-        ws.merge_cells(start_row=9, end_row=9, start_column=1, end_column=2)
-        ws.cell(row=9, column=1).value='컬럼 정보'
-        ws.cell(row=9, column=1).font=Font(bold=True, color="ffffff")
-        ws.cell(row=9, column=1).fill=PatternFill("solid", fgColor="000000")
-        ws.cell(row=9, column=1).alignment = Alignment(horizontal='center', vertical='center')
-        ws.cell(row=9, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
-        
-        for cell_ in ws['A2':'B7']:
-            for cell in cell_:
-                cell.fill = PatternFill("solid", fgColor="bfbfbf")
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
-        for cell_ in ws['B5':'B7']:
-            for cell in cell_:
-                cell.fill = PatternFill("solid", fgColor="d9d9d9")
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
-        for cell_ in ws['C2':'C7']:
-            for cell in cell_:
-                cell.alignment = Alignment(vertical='center')
-                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
-        
-        for i_, row in enumerate(ws.rows):
-            for cell_ in row:
-                if i_==9:
-                    if cell_.value in ['공통']:
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="bfbfbf")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    elif cell_.value in ['연속형']:
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="f4b084")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    elif cell_.value in ['범주형']:
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="9bc2e6")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    elif cell_.value in ['비고']:
-                        ws.merge_cells(f'V1:V2')
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="bfbfbf")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                elif i_==10:
-                    if cell_.value in self.RelCategory['공통'] + self.RelCategory['비고']:
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="d9d9d9")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    elif cell_.value in self.RelCategory['연속형']:
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="f8cbad")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                    elif cell_.value in self.RelCategory['범주형']:
-                        cell=ws[cell_.coordinate]
-                        cell.fill = PatternFill("solid", fgColor="bdd7ee")
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                elif i_>=11:
-                    cell=ws[cell_.coordinate]
-                    cell.alignment = Alignment(vertical='center', wrap_text=True)
+            for mcr in ws.merged_cells:
+                if 1 < mcr.min_col:
+                    mcr.shift(col_shift=-1)
+                elif 1 <= mcr.max_col:
+                    mcr.shrink(right=1)
+                    
+            thin = Side(border_style="thin", color="000000")
+            
+            ws.merge_cells(start_row=1, end_row=1, start_column=1, end_column=2)
+            ws.cell(row=1, column=1).value='테이블 정보'
+            ws.cell(row=1, column=1).font=Font(bold=True, color="ffffff")
+            ws.cell(row=1, column=1).fill=PatternFill("solid", fgColor="000000")
+            ws.cell(row=1, column=1).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=1, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            
+            ws.merge_cells(start_row=9, end_row=9, start_column=1, end_column=2)
+            ws.cell(row=9, column=1).value='컬럼 정보'
+            ws.cell(row=9, column=1).font=Font(bold=True, color="ffffff")
+            ws.cell(row=9, column=1).fill=PatternFill("solid", fgColor="000000")
+            ws.cell(row=9, column=1).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=9, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            
+            for cell_ in ws['A2':'B7']:
+                for cell in cell_:
+                    cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
-        
-        ColumnDimension(ws, bestFit=True)
+            for cell_ in ws['B5':'B7']:
+                for cell in cell_:
+                    cell.fill = PatternFill("solid", fgColor="d9d9d9")
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            for cell_ in ws['C2':'C7']:
+                for cell in cell_:
+                    cell.alignment = Alignment(vertical='center')
+                    cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            
+            for i_, row in enumerate(ws.rows):
+                for cell_ in row:
+                    if i_==9:
+                        if cell_.value in ['공통']:
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                        elif cell_.value in ['연속형']:
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="f4b084")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                        elif cell_.value in ['범주형']:
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="9bc2e6")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                        elif cell_.value in ['비고']:
+                            ws.merge_cells(f'V1:V2')
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                    elif i_==10:
+                        if cell_.value in self.RelCategory['공통'] + self.RelCategory['비고']:
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="d9d9d9")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                        elif cell_.value in self.RelCategory['연속형']:
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="f8cbad")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                        elif cell_.value in self.RelCategory['범주형']:
+                            cell=ws[cell_.coordinate]
+                            cell.fill = PatternFill("solid", fgColor="bdd7ee")
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                    elif i_>=11:
+                        cell=ws[cell_.coordinate]
+                        cell.alignment = Alignment(vertical='center', wrap_text=True)
+                        cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            
+            ColumnDimension(ws, bestFit=True)
         
         wb.save(OutputPath)
         
