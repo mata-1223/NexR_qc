@@ -1,1 +1,3 @@
-{"naList": ["?", "na", "null", "Null", "NULL", " ", "[NULL]"]}
+{
+    "naList": ["?", "na", "null", "Null", "NULL", " ", "[NULL]"]
+}
