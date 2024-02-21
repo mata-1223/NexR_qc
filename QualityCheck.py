@@ -29,13 +29,15 @@ class QualityCheck:
         self.PATH["LOG"] = os.path.join(self.PATH["ROOT"], "log")
         self.PATH["OUTPUT"] = os.path.join(self.PATH["ROOT"], "output")
 
+        self.colorSetting = {"grey": "\x1b[38;20m", "blue": "\033[34m", "green": "\033[32m", "yellow": "\x1b[33;20m", "red": "\x1b[31;20m", "bold_red": "\x1b[31;1m", "reset": "\x1b[0m"}
+
         for folder in self.PATH.keys():
             # 구성 폴더가 없을 경우, 생성
             if not os.path.exists(self.PATH[folder]):
                 Path(self.PATH[folder]).mkdir(parents=True, exist_ok=True)
 
         # 로그 구성
-        self.logger_save = False  # 로그 파일 생성 여부 (True: 로그 파일 생성 / False: 로그 파일 미생성)
+        self.logger_save = True  # 로그 파일 생성 여부 (True: 로그 파일 생성 / False: 로그 파일 미생성)
         self.logger = Logger(
             proc_name="Quality Check",
             log_folder_path=self.PATH["LOG"],
@@ -55,7 +57,7 @@ class QualityCheck:
 
     def data_check(self):
         self.logger.info("=" * 50)
-        self.logger.info("[Step 1] 데이터 파일 존재 여부 확인 시작")
+        self.logger.info(f"{self.colorSetting['green']}[Step 1] 데이터 파일 존재 여부 확인 시작{self.colorSetting['reset']}")
 
         # 데이터 존재 여부 확인
         self.files = {os.path.splitext(file)[0].upper(): os.path.join(self.PATH["DATA"], file) for file in os.listdir(self.PATH["DATA"]) if not file.startswith(".")}
@@ -81,16 +83,18 @@ class QualityCheck:
             self.DataDict[name]["TIMECOL"] = None
             while True:
                 # 날짜 관련 컬럼 입력
-                self.DataDict[name]["TIMECOL"] = list(input(f"""컬럼 중 날짜 혹은 시간 관련 컬럼 존재 여부를 알려주세요. (컬럼 정의서에 명시가 되어있는 경우나 날짜 혹은 시간 관련 컬럼이 없는 경우는 Enter로 넘어가셔도 됩니다.)\n현재 {name} 데이터의 컬럼은 다음과 같습니다.\n{self.DataDict[name]["DATA"].columns.tolist()}\n\n[{name}] 날짜 혹은 시간 관련 컬럼: """).split())
+                self.logger.info(f"""컬럼 중 날짜 혹은 시간 관련 컬럼 존재 여부를 알려주세요. (컬럼 정의서에 명시가 되어있는 경우나 날짜 혹은 시간 관련 컬럼이 없는 경우는 Enter로 넘어가셔도 됩니다.)\n현재 {name} 데이터의 컬럼은 다음과 같습니다.\n{self.DataDict[name]["DATA"].columns.tolist()}\n\n""")
+                self.DataDict[name]["TIMECOL"] = list(input(f"""{self.colorSetting["yellow"]}[{name}] 날짜 혹은 시간 관련 컬럼:{self.colorSetting["reset"]} """).split())
+                self.logger.info(f"""{self.colorSetting["yellow"]}[{name}] 날짜 혹은 시간 관련 컬럼:{self.colorSetting["reset"]}: {self.DataDict[name]["TIMECOL"]}""")
                 # 입력값 유효성 검증
                 if all(time_col in self.DataDict[name]["DATA"].columns.tolist() for time_col in self.DataDict[name]["TIMECOL"]):
                     break
-                self.logger.error("컬럼명 입력값이 잘못 입력되었습니다. 입력하신 컬럼명을 다시 한번 확인해주세요.")
-        self.logger.info("[Step 1] 데이터 파일 존재 여부 확인 완료")
+                self.logger.error("⛔️ 컬럼명 입력값이 잘못 입력되었습니다. 입력하신 컬럼명을 다시 한번 확인해주세요.")
+        self.logger.info(f"{self.colorSetting['green']}[Step 1] 데이터 파일 존재 여부 확인 완료{self.colorSetting['reset']}")
 
     def document_check(self):
         self.logger.info("=" * 50)
-        self.logger.info("[Step 2] 정의서 파일 존재 여부 확인 시작")
+        self.logger.info(f"{self.colorSetting['green']}[Step 2] 정의서 파일 존재 여부 확인 시작{self.colorSetting['reset']}")
 
         # 정의서 파일 존재 여부 확인
         DocList = ["테이블정의서", "컬럼정의서", "코드정의서"]
@@ -112,11 +116,11 @@ class QualityCheck:
                 self.DocumentDict[Doc]["DATA"] = None
                 self.logger.info(f"[{Doc}] 참고할 문서 파일이 없습니다.")
 
-        self.logger.info("[Step 2] 정의서 파일 존재 여부를 확인 완료")
+        self.logger.info(f"{self.colorSetting['green']}[Step 2] 정의서 파일 존재 여부를 확인 완료{self.colorSetting['reset']}")
 
     def na_check(self):
         self.logger.info("=" * 50)
-        self.logger.info("[Step 3] 사전에 등록된 결측값 확인 시작")
+        self.logger.info(f"{self.colorSetting['green']}[Step 3] 사전에 등록된 결측값 확인 시작{self.colorSetting['reset']}")
 
         # 결측값 Custom 기능
         self.naList = self.config["naList"]
@@ -124,13 +128,13 @@ class QualityCheck:
         self.logger.info(f"{self.naList}")
         self.logger.info(f"결측값 추가 등록을 원하시면 config.json 파일 내 naList 값에 추가 시 반영됩니다.")
 
-        self.logger.info("[Step 3] 사전에 등록된 결측값 확인 완료")
+        self.logger.info(f"{self.colorSetting['green']}[Step 3] 사전에 등록된 결측값 확인 완료{self.colorSetting['reset']}")
 
     def run(self):
 
         # QC 수행
         self.logger.info("=" * 50)
-        self.logger.info(f"데이터 QC를 수행합니다.")
+        self.logger.info(f"{self.colorSetting['green']}[Step 4] QC 사전 정보 확인 시작{self.colorSetting['reset']}")
 
         self.ResultDict = {data_name: {} for data_name in self.DataDict.keys()}
         self.InfoDict = {data_name: {"Table": {}, "Column": {}} for data_name in self.DataDict.keys()}
@@ -241,19 +245,27 @@ class QualityCheck:
             else:
                 self.logger.info(f"컬럼 정의서 문서가 존재하지 않습니다.")
 
-            self.logger.info(f"[Step 4-2] 정의서 문서 정보 확인 완료")
+        self.logger.info(f"[Step 4-2] 정의서 문서 정보 확인 완료")
+        self.logger.info(f"{self.colorSetting['green']}[Step 4] QC 사전 정보 확인 완료{self.colorSetting['reset']}")
 
-            # Step 3: 결과 항목 값 세팅
-            self.RelCategory = {
-                "공통": ["No", "컬럼 영문명", "컬럼 한글명", "데이터 타입", "null 개수", "%null", "적재건수", "%적재건수"],
-                "연속형": ["최솟값", "최댓값", "평균", "표준편차", "중위수"],
-                "범주형": ["범주수", "범주", "%범주", "정의된 범주 외", "정의된 범주 외 수", "최빈값", "최빈값 수", "%최빈값"],
-                "비고": ["비고"],
-            }
+        # Step 5. 항목별 QC 실행
+        # 결과 항목 값 세팅
+        self.RelCategory = {
+            "공통": ["No", "컬럼 영문명", "컬럼 한글명", "데이터 타입", "null 개수", "%null", "적재건수", "%적재건수"],
+            "연속형": ["최솟값", "최댓값", "평균", "표준편차", "중위수"],
+            "범주형": ["범주수", "범주", "%범주", "정의된 범주 외", "정의된 범주 외 수", "최빈값", "최빈값 수", "%최빈값"],
+            "비고": ["비고"],
+        }
+
+        self.logger.info("=" * 50)
+        self.logger.info(f"{self.colorSetting['green']}[Step 5] 항목별 데이터 QC 시작{self.colorSetting['reset']}")
+        for i, data_name in enumerate(self.DataDict.keys()):
+            self.logger.info("[{data_name}] QC 시작")
+            data = self.DataDict[data_name]["DATA"]
 
             self.InfoDict[data_name]["Result"] = {f"{idx+1:03d}": {"공통": {"No": f"{idx+1:03d}", "컬럼 영문명": col}} for idx, col in enumerate(data.columns)}
 
-            # Step 4-1: 공통 영역 QC 수행
+            # Step 5-1: 공통 영역 QC 수행
             for idx in self.InfoDict[data_name]["Result"].keys():
                 col = self.InfoDict[data_name]["Result"][idx]["공통"]["컬럼 영문명"]
                 self.InfoDict[data_name]["Result"][idx]["공통"]["컬럼 한글명"] = self.InfoDict[data_name]["Column"][col]["컬럼 한글명"]  # 컬럼 한글명
@@ -263,7 +275,7 @@ class QualityCheck:
                 self.InfoDict[data_name]["Result"][idx]["공통"]["적재건수"] = "{:,}".format(data[col].notnull().sum())  # 적재건수
                 self.InfoDict[data_name]["Result"][idx]["공통"]["%적재건수"] = "{:.2%}".format(data[col].notnull().sum() / data.shape[0])  # %적재건수
 
-            # Step 4-2: 연속형 영역 QC 수행
+            # Step 5-2: 연속형 영역 QC 수행
             for idx in self.InfoDict[data_name]["Result"].keys():
                 self.InfoDict[data_name]["Result"][idx]["연속형"] = {}
                 col = self.InfoDict[data_name]["Result"][idx]["공통"]["컬럼 영문명"]
@@ -286,7 +298,7 @@ class QualityCheck:
                     self.InfoDict[data_name]["Result"][idx]["연속형"]["최솟값"] = str(data[col].min())  # 최솟값
                     self.InfoDict[data_name]["Result"][idx]["연속형"]["최댓값"] = str(data[col].max())  # 최댓값
 
-            # Step 4-3: 범주형 영역 QC 수행
+            # Step 5-3: 범주형 영역 QC 수행
             for idx in self.InfoDict[data_name]["Result"].keys():
                 self.InfoDict[data_name]["Result"][idx]["범주형"] = {}
                 col = self.InfoDict[data_name]["Result"][idx]["공통"]["컬럼 영문명"]
@@ -331,12 +343,16 @@ class QualityCheck:
                         self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값 수"] = {mode_col: "{:,}".format(data[col].loc[data[col] == mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]}  # 최빈값 수
                         self.InfoDict[data_name]["Result"][idx]["범주형"]["%최빈값"] = {mode_col: "{:.2%}".format((data[col].loc[data[col] == mode_col].shape[0]) / (data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]}  # %최빈값
 
-            # Step 4-4: 비고 영역 QC 수행
+            # Step 5-4: 비고 영역 QC 수행
             for idx in self.InfoDict[data_name]["Result"].keys():
                 self.InfoDict[data_name]["Result"][idx]["비고"] = {}
                 col = self.InfoDict[data_name]["Result"][idx]["공통"]["컬럼 영문명"]
 
                 self.InfoDict[data_name]["Result"][idx]["비고"]["비고"] = None  # 비고
+
+            self.logger.info("[{data_name}] QC 완료")
+
+        self.logger.info(f"{self.colorSetting['green']}[Step 5] 항목별 데이터 QC 완료{self.colorSetting['reset']}")
 
     def convert_to_richtext(self, src):
         if type(src) is list:
@@ -355,8 +371,10 @@ class QualityCheck:
     def save(self):
         # 결과 저장
 
-        # Step 5: QC 결과서 산출물 생성
-        # Step 5-1: 기본 Excel 파일 생성
+        # Step 6: QC 결과서 산출물 생성
+        # Step 6-1: 기본 Excel 파일 생성
+        self.logger.info("=" * 50)
+        self.logger.info(f"{self.colorSetting['green']}[Step 6] 데이터 QC 결과 저장 작업 시작{self.colorSetting['reset']}")
         SubCol1, SubCol2 = [], []
         for key1 in self.RelCategory.keys():
             SubCol1 += [key1] * len(self.RelCategory[key1])
@@ -395,7 +413,7 @@ class QualityCheck:
                     startrow=9,
                 )
 
-        # Step 5-2: 저장한 Excel 파일 서식 편집
+        # Step 6-2: 저장한 Excel 파일 서식 편집
         wb = load_workbook(OutputPath)
 
         for data_name in self.ResultDict.keys():
@@ -482,5 +500,8 @@ class QualityCheck:
             ColumnDimension(ws, bestFit=True)
 
         wb.save(OutputPath)
-
+        self.logger.info(f"{self.colorSetting['green']}[Step 6] 데이터 QC 결과 저장 작업 완료{self.colorSetting['reset']}")
+        self.logger.info(f"모든 QC 프로세스가 완료되었습니다.")
         self.timer.stop()
+        self.logger.info(f"산출물 파일 경로: {self.colorSetting['blue']}{OutputPath}{self.colorSetting['reset']}")
+
