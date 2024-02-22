@@ -20,16 +20,18 @@ from utils.Timer import *
 
 class QualityCheck:
 
-    def __init__(self):
+    def __init__(self, DataDict):
+        # DataDict (dict): {'데이터명1': dataframe1, ...}
         # 초기 디렉토리 세팅
         self.PATH = {}
         self.PATH["ROOT"] = os.getcwd()
-        self.PATH["DATA"] = os.path.join(self.PATH["ROOT"], "data")
         self.PATH["DOCS"] = os.path.join(self.PATH["ROOT"], "documents")
         self.PATH["LOG"] = os.path.join(self.PATH["ROOT"], "log")
         self.PATH["OUTPUT"] = os.path.join(self.PATH["ROOT"], "output")
 
         self.colorSetting = {"grey": "\x1b[38;20m", "blue": "\033[34m", "green": "\033[32m", "yellow": "\x1b[33;20m", "red": "\x1b[31;20m", "bold_red": "\x1b[31;1m", "reset": "\x1b[0m"}
+
+        self.DataDict = DataDict
 
         for folder in self.PATH.keys():
             # 구성 폴더가 없을 경우, 생성
@@ -59,27 +61,16 @@ class QualityCheck:
         self.logger.info("=" * 50)
         self.logger.info(f"{self.colorSetting['green']}[Step 1] 데이터 파일 존재 여부 확인 시작{self.colorSetting['reset']}")
 
-        # 데이터 존재 여부 확인
-        self.files = {os.path.splitext(file)[0].upper(): os.path.join(self.PATH["DATA"], file) for file in os.listdir(self.PATH["DATA"]) if not file.startswith(".")}
-
         # 데이터 파일이 존재하지 않을 경우 에러 로그 기록
-        if len(self.files.keys()) == 0:
+        if len(self.DataDict.keys()) == 0:
             self.logger.error(f"QC를 수행할 데이터 파일이 존재하지 않습니다.")
             return
 
-        self.logger.info(f"총 {len(self.files):,} 개의 데이터 파일이 존재합니다.")
-        self.logger.info(f"{self.files}")
+        self.logger.info(f"총 {len(self.DataDict):,} 개의 데이터 파일이 존재합니다.")
 
-        self.DataDict = {}
-        for name, path in self.files.items():
+        for name, data in self.DataDict.items():
             self.DataDict[name] = {}
-            self.DataDict[name]["PATH"] = path
-            self.DataDict[name]["EXT"] = os.path.splitext(os.path.basename(path))[-1]
-            self.DataDict[name]["DATA"] = self.readFunc[self.DataDict[name]["EXT"]](
-                self.DataDict[name]["PATH"],
-                na_values=self.config["naList"],
-                date_format="mixed",
-            )  # 데이터
+            self.DataDict[name]["DATA"] = data.replace(self.config["naList"], np.nan)
             self.DataDict[name]["TIMECOL"] = None
             while True:
                 # 날짜 관련 컬럼 입력
@@ -141,12 +132,12 @@ class QualityCheck:
 
         # Step 1: 데이터 정보 확인
         self.logger.info("-" * 30)
-        self.logger.info(f"[Step 4-1] 데이터 파일 정보 확인 시작")
+        self.logger.info(f"[Step 4-1] 데이터 자체 정보 확인 시작")
 
         for i, data_name in enumerate(self.DataDict.keys()):
             self.logger.info(f"{i + 1} 번째 데이터명: {data_name}")
 
-        self.logger.info(f"[Step 4-1] 데이터 파일 정보 확인 완료")
+        self.logger.info(f"[Step 4-1] 데이터 자체 정보 확인 완료")
 
         # Step 2: 정의서 문서 파일 불러오기
         self.logger.info("-" * 30)
@@ -235,7 +226,7 @@ class QualityCheck:
                             self.logger.info(f"컬럼 정의서에 {col} 컬럼 정보가 존재합니다.")
                             self.InfoDict[data_name]["Column"][col]["컬럼 영문명"] = col
                             self.InfoDict[data_name]["Column"][col]["컬럼 한글명"] = column_document.loc[column_document["컬럼 영문명"] == col.upper(), "컬럼 한글명"].values[0]
-                            self.InfoDict[data_name]["Column"][col]["데이터 타입"] = column_document.loc[column_document["컬럼 영문명"] == col.upper(), "데이터 타입"].values[0]
+                            self.InfoDict[data_name]["Column"][col]["데이터 타입"] = "datetime" if col in self.DataDict[data_name]["TIMECOL"] else column_document.loc[column_document["컬럼 영문명"] == col.upper(), "데이터 타입"].values[0]
                             self.InfoDict[data_name]["Column"][col]["코드대분류"] = column_document.loc[column_document["컬럼 영문명"] == col.upper(), "코드대분류"].values[0]
                             self.InfoDict[data_name]["Column"][col]["코드값"] = [val for val in code_document.loc[(code_document.loc[:, "코드 대분류"] == self.InfoDict[data_name]["Column"][col]["코드대분류"]), "코드값"].values if val is not np.nan] if self.InfoDict[data_name]["Column"][col]["코드대분류"] in code_values else None
                         else:
@@ -260,7 +251,7 @@ class QualityCheck:
         self.logger.info("=" * 50)
         self.logger.info(f"{self.colorSetting['green']}[Step 5] 항목별 데이터 QC 시작{self.colorSetting['reset']}")
         for i, data_name in enumerate(self.DataDict.keys()):
-            self.logger.info("[{data_name}] QC 시작")
+            self.logger.info(f"[{data_name}] QC 시작")
             data = self.DataDict[data_name]["DATA"]
 
             self.InfoDict[data_name]["Result"] = {f"{idx+1:03d}": {"공통": {"No": f"{idx+1:03d}", "컬럼 영문명": col}} for idx, col in enumerate(data.columns)}
@@ -350,7 +341,7 @@ class QualityCheck:
 
                 self.InfoDict[data_name]["Result"][idx]["비고"]["비고"] = None  # 비고
 
-            self.logger.info("[{data_name}] QC 완료")
+            self.logger.info(f"[{data_name}] QC 완료")
 
         self.logger.info(f"{self.colorSetting['green']}[Step 5] 항목별 데이터 QC 완료{self.colorSetting['reset']}")
 
@@ -436,6 +427,9 @@ class QualityCheck:
             ws.cell(row=1, column=1).fill = PatternFill("solid", fgColor="000000")
             ws.cell(row=1, column=1).alignment = Alignment(horizontal="center", vertical="center")
             ws.cell(row=1, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+            ws.merge_cells(start_row=2, end_row=2, start_column=1, end_column=2)
+            ws.merge_cells(start_row=3, end_row=3, start_column=1, end_column=2)
+            ws.merge_cells(start_row=4, end_row=4, start_column=1, end_column=2)
 
             ws.merge_cells(start_row=9, end_row=9, start_column=1, end_column=2)
             ws.cell(row=9, column=1).value = "컬럼 정보"
@@ -501,7 +495,6 @@ class QualityCheck:
 
         wb.save(OutputPath)
         self.logger.info(f"{self.colorSetting['green']}[Step 6] 데이터 QC 결과 저장 작업 완료{self.colorSetting['reset']}")
-        self.logger.info(f"모든 QC 프로세스가 완료되었습니다.")
+        self.logger.info(f"{self.colorSetting['green']}모든 QC 프로세스가 완료되었습니다.{self.colorSetting['reset']}")
         self.timer.stop()
         self.logger.info(f"산출물 파일 경로: {self.colorSetting['blue']}{OutputPath}{self.colorSetting['reset']}")
-
