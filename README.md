@@ -18,7 +18,7 @@ pip install NexR_qc
 ```
 
 ### 디렉토리 기본 구성
-- documents 하위 항목([테이블정의서](https://github.com/mata-1223/NexR_qc/raw/main/NexR_qc/documents/%ED%85%8C%EC%9D%B4%EB%B8%94%EC%A0%95%EC%9D%98%EC%84%9C.xlsx), [컬럼정의서](https://github.com/mata-1223/NexR_qc/raw/main/NexR_qc/documents/%EC%BB%AC%EB%9F%BC%EC%A0%95%EC%9D%98%EC%84%9C.xlsx), [코드정의서](https://github.com/mata-1223/NexR_qc/raw/main/NexR_qc/documents/%EC%BD%94%EB%93%9C%EC%A0%95%EC%9D%98%EC%84%9C.xlsx))은 필수 항목은 아니지만, 테이블별 정확한 정보를 얻기위해서 작성되는 문서임 (각 링크 내 문서 양식 참고)
+- documents 하위 항목(테이블정의서, 컬럼정의서, 코드정의서)은 필수 항목은 아니지만, 테이블별 정확한 정보를 얻기위해서 작성되는 문서임 ([Github 링크](https://github.com/mata-1223/NexR_qc) 내 문서 양식 참고)
 - log, output 폴더는 초기에 생성되어 있지않아도 수행 결과로 자동 생성됨
 - config.json 파일은 데이터 내 결측값을 커스텀하기 위한 파일로 초기에 생성되어 있지않아도 수행 결과로 자동 생성됨 (결측처리 default 값: "?", "na", "null", "Null", "NULL", " ", "[NULL]")
 
@@ -78,3 +78,9 @@ Process.save()
 		* data_name: 데이터 테이블명 or 데이터 파일명 
 		* Dataframe: 데이터를 불러온 Dataframe 형상
 * 예시
+![NexR_qc_Info_001](https://github.com/mata-1223/NexR_qc/assets/131343466/a1613944-4812-40a2-9ec3-6452c104a96b)
+
+### Output
+* 결과 파일 경로: output/QC_결과서.xlsx
+* 예시
+![NexR_qc_Info_002](https://github.com/mata-1223/NexR_qc/assets/131343466/5e28e8bf-37f2-4cc0-acca-c288bfbd5ccb)
