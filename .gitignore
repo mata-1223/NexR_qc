@@ -9,3 +9,11 @@ __pycache__/
 .ipynb_checkpoints/
 
 .DS_Store
+
+build/
+
+dist/
+
+*.egg-info/
+
+setup.py
