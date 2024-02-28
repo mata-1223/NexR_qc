@@ -1,4 +1,4 @@
-from QualityCheck import *
+from NexR_qc.QualityCheck import *
 
 PathDict = {}
 PathDict["ROOT"] = os.getcwd()

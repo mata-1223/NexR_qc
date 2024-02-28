@@ -14,8 +14,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, GradientFill, PatternFill, Side
 from openpyxl.worksheet.dimensions import ColumnDimension
 
-from utils.Logging import *
-from utils.Timer import *
+from NexR_qc.Logging import *
+from NexR_qc.Timer import *
 
 
 class QualityCheck:
@@ -41,7 +41,7 @@ class QualityCheck:
         # 로그 구성
         self.logger_save = True  # 로그 파일 생성 여부 (True: 로그 파일 생성 / False: 로그 파일 미생성)
         self.logger = Logger(
-            proc_name="Quality Check",
+            proc_name="QualityCheck",
             log_folder_path=self.PATH["LOG"],
             save=self.logger_save,
         )
@@ -50,8 +50,15 @@ class QualityCheck:
         self.timer.start()
 
         # Config 파일 불러오기
-        with open(os.path.join(self.PATH["ROOT"], "config.json"), "r") as f:
-            self.config = json.load(f)
+        if "config.json" in os.listdir(self.PATH["ROOT"]):
+            with open(os.path.join(self.PATH["ROOT"], "config.json"), "r") as f:
+                self.config = json.load(f)
+        else:
+            self.config = {"naList": ["?", "na", "null", "Null", "NULL", " ", "[NULL]"]}
+            print(self.config)
+            with open(os.path.join(self.PATH["ROOT"], "config.json"), "w") as f:
+                json.dump(self.config, f)
+            self.logger.info(f'config 파일을 생성하였습니다. (생성 경로: {os.path.join(self.PATH["ROOT"], "config.json")})')
 
         self.readFunc = {}
         self.readFunc[".csv"] = pd.read_csv
