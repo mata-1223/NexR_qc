@@ -18,7 +18,7 @@ pip install NexR_qc
 ```
 
 ### 디렉토리 기본 구성
-- documents 하위 항목(테이블정의서, 컬럼정의서, 코드정의서)은 필수 항목은 아니지만, 테이블별 정확한 정보를 얻기위해서 작성되는 문서임 ([Github 링크](https://github.com/mata-1223/NexR_qc) 내 문서 양식 참고)
+- documents 하위 항목(테이블정의서, 컬럼정의서, 코드정의서)은 필수 항목은 아니지만, 테이블별 정확한 정보를 얻기위해서 작성되는 문서임 ([Github 링크](https://github.com/mata-1223/NexR_qc)의 document 폴더 내 문서 양식 참고)
 - log, output 폴더는 초기에 생성되어 있지않아도 수행 결과로 자동 생성됨
 - config.json 파일은 데이터 내 결측값을 커스텀하기 위한 파일로 초기에 생성되어 있지않아도 수행 결과로 자동 생성됨 (결측처리 default 값: "?", "na", "null", "Null", "NULL", " ", "[NULL]")
 
