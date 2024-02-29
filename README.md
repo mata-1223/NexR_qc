@@ -14,7 +14,7 @@
 ### pip 설치
 ```
 #!/bin/bash
-pip install NexR_qc==0.0.7
+pip install NexR_qc
 ```
 
 ### 디렉토리 기본 구성
