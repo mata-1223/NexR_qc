@@ -1,3 +1,4 @@
+import argparse
 import copy
 import datetime
 import json
@@ -12,6 +13,7 @@ import numpy as np
 import pandas as pd
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, GradientFill, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.dimensions import ColumnDimension
 
 from NexR_qc.Logging import *
@@ -55,7 +57,6 @@ class QualityCheck:
                 self.config = json.load(f)
         else:
             self.config = {"naList": ["?", "na", "null", "Null", "NULL", " ", "[NULL]"]}
-            print(self.config)
             with open(os.path.join(self.PATH["ROOT"], "config.json"), "w") as f:
                 json.dump(self.config, f)
             self.logger.info(f'config 파일을 생성하였습니다. (생성 경로: {os.path.join(self.PATH["ROOT"], "config.json")})')
@@ -75,19 +76,26 @@ class QualityCheck:
 
         self.logger.info(f"총 {len(self.DataDict):,} 개의 데이터 파일이 존재합니다.")
 
+        # 날짜 혹은 시간 컬럼 관련 추가 정보 입력 필요 여부값 확인
+        self.config["DateTimeInfoQuestion_YN"] = True if input(f"""{self.colorSetting["yellow"]}각 테이블 내 날짜 혹은 시간 관련 컬럼에 대한 추가 정보 입력이 필요한 경우 Y, 추가 정보 입력이 필요 없는 경우는 N을 입력해주세요 (Y/N):{self.colorSetting["reset"]} """) == "Y" else False
+
         for name, data in self.DataDict.items():
             self.DataDict[name] = {}
             self.DataDict[name]["DATA"] = data.replace(self.config["naList"], np.nan)
             self.DataDict[name]["TIMECOL"] = None
-            while True:
-                # 날짜 관련 컬럼 입력
-                self.logger.info(f"""컬럼 중 날짜 혹은 시간 관련 컬럼 존재 여부를 알려주세요. (컬럼 정의서에 명시가 되어있는 경우나 날짜 혹은 시간 관련 컬럼이 없는 경우는 Enter로 넘어가셔도 됩니다.)\n현재 {name} 데이터의 컬럼은 다음과 같습니다.\n{self.DataDict[name]["DATA"].columns.tolist()}\n\n""")
-                self.DataDict[name]["TIMECOL"] = list(input(f"""{self.colorSetting["yellow"]}[{name}] 날짜 혹은 시간 관련 컬럼:{self.colorSetting["reset"]} """).split())
-                self.logger.info(f"""{self.colorSetting["yellow"]}[{name}] 날짜 혹은 시간 관련 컬럼:{self.colorSetting["reset"]}: {self.DataDict[name]["TIMECOL"]}""")
-                # 입력값 유효성 검증
-                if all(time_col in self.DataDict[name]["DATA"].columns.tolist() for time_col in self.DataDict[name]["TIMECOL"]):
-                    break
-                self.logger.error("⛔️ 컬럼명 입력값이 잘못 입력되었습니다. 입력하신 컬럼명을 다시 한번 확인해주세요.")
+            if not self.config["DateTimeInfoQuestion_YN"]:
+                self.DataDict[name]["TIMECOL"] = []
+            else:
+                while True:
+                    # 날짜 혹은 시간 컬럼 관련 추가 정보 입력
+                    self.logger.info(f"""컬럼 중 날짜 혹은 시간 관련 컬럼 존재 여부를 알려주세요. (컬럼 정의서에 명시가 되어있는 경우나 날짜 혹은 시간 관련 컬럼이 없는 경우는 Enter로 넘어가셔도 됩니다.)\n현재 {name} 데이터의 컬럼은 다음과 같습니다.\n{self.DataDict[name]["DATA"].columns.tolist()}\n\n""")
+                    col_ = list(input(f"""{self.colorSetting["yellow"]}[{name}] 날짜 혹은 시간 관련 컬럼:{self.colorSetting["reset"]} """).split(","))
+                    self.DataDict[name]["TIMECOL"] = [col.strip() for col in col_] if col_ != [""] else []
+                    self.logger.info(f"""{self.colorSetting["yellow"]}[{name}] 날짜 혹은 시간 관련 컬럼:{self.colorSetting["reset"]}: {self.DataDict[name]["TIMECOL"]}""")
+                    # 입력값 유효성 검증
+                    if all(time_col in self.DataDict[name]["DATA"].columns.tolist() for time_col in self.DataDict[name]["TIMECOL"]):
+                        break
+                    self.logger.error("⛔️ 컬럼명 입력값이 잘못 입력되었습니다. 입력하신 컬럼명을 다시 한번 확인해주세요.")
         self.logger.info(f"{self.colorSetting['green']}[Step 1] 데이터 파일 존재 여부 확인 완료{self.colorSetting['reset']}")
 
     def document_check(self):
@@ -243,6 +251,10 @@ class QualityCheck:
             else:
                 self.logger.info(f"컬럼 정의서 문서가 존재하지 않습니다.")
 
+        # 테이블 리스트 정보 획득
+        TableList_ = [[idx + 1, self.InfoDict[data_name]["Table"]["스키마명"], self.InfoDict[data_name]["Table"]["테이블 영문명"], self.InfoDict[data_name]["Table"]["테이블 한글명"], f"{idx+1:04d}_{self.InfoDict[data_name]['Table']['테이블 영문명'][:26]}"] for idx, data_name in enumerate(self.DataDict.keys())]
+        self.InfoDict["TableList"] = pd.DataFrame(TableList_, columns=["No.", "스키마명", "테이블 영문명", "테이블 한글명", "워크 시트명"])
+
         self.logger.info(f"[Step 4-2] 정의서 문서 정보 확인 완료")
         self.logger.info(f"{self.colorSetting['green']}[Step 4] QC 사전 정보 확인 완료{self.colorSetting['reset']}")
 
@@ -393,12 +405,26 @@ class QualityCheck:
             self.ResultDict[data_name]["Bottom"] = pd.DataFrame(ResultList, columns=ColList)
 
         with pd.ExcelWriter(OutputPath, mode="w", engine="openpyxl") as writer:
-            for data_name in self.ResultDict.keys():
+
+            # Step 6-1-a 테이블 리스트 시트
+            self.InfoDict["TableList"].to_excel(
+                writer,
+                index=False,
+                header=True,
+                sheet_name="테이블 리스트",
+                startcol=0,
+                startrow=0,
+            )
+
+            self.logger.info(f"테이블 리스트 시트 생성 완료")
+
+            # Step 6-1-a 테이블 별 QC 결과서 시트
+            for idx, data_name in enumerate(self.ResultDict.keys()):
                 self.ResultDict[data_name]["Top"].to_excel(
                     writer,
                     index=True,
                     header=False,
-                    sheet_name=data_name,
+                    sheet_name=f"{idx+1:04d}_{self.InfoDict[data_name]['Table']['테이블 영문명'][:26]}",
                     startcol=1,
                     startrow=1,
                 )
@@ -406,99 +432,152 @@ class QualityCheck:
                     writer,
                     index=True,
                     header=True,
-                    sheet_name=data_name,
+                    sheet_name=f"{idx+1:04d}_{self.InfoDict[data_name]['Table']['테이블 영문명'][:26]}",
                     startcol=0,
                     startrow=9,
                 )
 
+                if any([(idx + 1) % 10 == 0, (idx + 1) == len(self.ResultDict.keys())]):
+                    self.logger.info(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 생성 완료")
+
         # Step 6-2: 저장한 Excel 파일 서식 편집
         wb = load_workbook(OutputPath)
 
-        for data_name in self.ResultDict.keys():
-            ws = wb[data_name]
+        thin = Side(border_style="thin", color="000000")
 
-            ws.delete_rows(12)
-            ws.delete_cols(1)
+        # Step 6-2-a 테이블 리스트 시트
+        ws = wb["테이블 리스트"]
 
-            for mcr in ws.merged_cells:
-                if 1 < mcr.min_col:
-                    mcr.shift(col_shift=-1)
-                elif 1 <= mcr.max_col:
-                    mcr.shrink(right=1)
+        for cell_ in ws["A1":"D1"]:
+            for cell in cell_:
+                cell.fill = PatternFill("solid", fgColor="ededed")
+                cell.font = Font(bold=True)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
 
-            thin = Side(border_style="thin", color="000000")
-
-            ws.merge_cells(start_row=1, end_row=1, start_column=1, end_column=2)
-            ws.cell(row=1, column=1).value = "테이블 정보"
-            ws.cell(row=1, column=1).font = Font(bold=True, color="ffffff")
-            ws.cell(row=1, column=1).fill = PatternFill("solid", fgColor="000000")
-            ws.cell(row=1, column=1).alignment = Alignment(horizontal="center", vertical="center")
-            ws.cell(row=1, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
-            ws.merge_cells(start_row=2, end_row=2, start_column=1, end_column=2)
-            ws.merge_cells(start_row=3, end_row=3, start_column=1, end_column=2)
-            ws.merge_cells(start_row=4, end_row=4, start_column=1, end_column=2)
-
-            ws.merge_cells(start_row=9, end_row=9, start_column=1, end_column=2)
-            ws.cell(row=9, column=1).value = "컬럼 정보"
-            ws.cell(row=9, column=1).font = Font(bold=True, color="ffffff")
-            ws.cell(row=9, column=1).fill = PatternFill("solid", fgColor="000000")
-            ws.cell(row=9, column=1).alignment = Alignment(horizontal="center", vertical="center")
-            ws.cell(row=9, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
-
-            for cell_ in ws["A2":"B7"]:
-                for cell in cell_:
-                    cell.fill = PatternFill("solid", fgColor="bfbfbf")
+        for row_i_, row in enumerate(ws.rows):
+            for col_i_, cell_ in enumerate(row):
+                if all([row_i_ > 0, col_i_ == 0]):
+                    cell = ws[cell_.coordinate]
+                    cell.fill = PatternFill("solid", fgColor="d8d8d8")
+                    cell.font = Font(bold=True)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
-            for cell_ in ws["B5":"B7"]:
-                for cell in cell_:
-                    cell.fill = PatternFill("solid", fgColor="d9d9d9")
+                elif all([row_i_ > 0, col_i_ != 2]):
+                    cell = ws[cell_.coordinate]
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
-            for cell_ in ws["C2":"C7"]:
-                for cell in cell_:
-                    cell.alignment = Alignment(vertical="center")
+                elif all([row_i_ > 0, col_i_ == 2]):
+                    cell = ws[cell_.coordinate]
+                    hyperlink_value = f"#'{ws.cell(row = row_i_+1, column = col_i_ + 3).value}'!A1"
+                    cell.hyperlink = f"{hyperlink_value}"
+                    cell.style = "Hyperlink"
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
 
-            for i_, row in enumerate(ws.rows):
-                for cell_ in row:
-                    if i_ == 9:
-                        if cell_.value in ["공통"]:
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="bfbfbf")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif cell_.value in ["연속형"]:
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="f4b084")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif cell_.value in ["범주형"]:
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="9bc2e6")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif cell_.value in ["비고"]:
-                            ws.merge_cells(f"V1:V2")
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="bfbfbf")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                    elif i_ == 10:
-                        if cell_.value in self.RelCategory["공통"] + self.RelCategory["비고"]:
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="d9d9d9")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif cell_.value in self.RelCategory["연속형"]:
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="f8cbad")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                        elif cell_.value in self.RelCategory["범주형"]:
-                            cell = ws[cell_.coordinate]
-                            cell.fill = PatternFill("solid", fgColor="bdd7ee")
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                    elif i_ >= 11:
-                        cell = ws[cell_.coordinate]
-                        cell.alignment = Alignment(vertical="center", wrap_text=True)
+        ws.column_dimensions["A"].width = 13.67
+        ws.column_dimensions["B"].width = 15
+        ws.column_dimensions["C"].width = 24.33
+        ws.column_dimensions["D"].width = 60.83
+
+        ws.delete_cols(5)
+        self.logger.info(f"테이블 리스트 시트 서식 편집 완료")
+
+        # Step 6-2-b 테이블 별 QC 결과서 시트
+        for idx, data_name in enumerate(self.ResultDict.keys()):
+
+            try:
+
+                sheet_name = f"{idx+1:04d}_{self.InfoDict[data_name]['Table']['테이블 영문명'][:26]}"
+                ws = wb[sheet_name]
+
+                ws.delete_rows(12)
+                ws.delete_cols(1)
+
+                for mcr in ws.merged_cells:
+                    if 1 < mcr.min_col:
+                        mcr.shift(col_shift=-1)
+                    elif 1 <= mcr.max_col:
+                        mcr.shrink(right=1)
+
+                ws.merge_cells(start_row=1, end_row=1, start_column=1, end_column=2)
+                ws.cell(row=1, column=1).value = "테이블 정보"
+                ws.cell(row=1, column=1).font = Font(bold=True, color="ffffff")
+                ws.cell(row=1, column=1).fill = PatternFill("solid", fgColor="000000")
+                ws.cell(row=1, column=1).alignment = Alignment(horizontal="center", vertical="center")
+                ws.cell(row=1, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+                ws.merge_cells(start_row=2, end_row=2, start_column=1, end_column=2)
+                ws.merge_cells(start_row=3, end_row=3, start_column=1, end_column=2)
+                ws.merge_cells(start_row=4, end_row=4, start_column=1, end_column=2)
+
+                ws.merge_cells(start_row=9, end_row=9, start_column=1, end_column=2)
+                ws.cell(row=9, column=1).value = "컬럼 정보"
+                ws.cell(row=9, column=1).font = Font(bold=True, color="ffffff")
+                ws.cell(row=9, column=1).fill = PatternFill("solid", fgColor="000000")
+                ws.cell(row=9, column=1).alignment = Alignment(horizontal="center", vertical="center")
+                ws.cell(row=9, column=1).border = Border(top=thin, left=thin, right=thin, bottom=thin)
+
+                for cell_ in ws["A2":"B7"]:
+                    for cell in cell_:
+                        cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                        cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+                for cell_ in ws["B5":"B7"]:
+                    for cell in cell_:
+                        cell.fill = PatternFill("solid", fgColor="d9d9d9")
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                        cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+                for cell_ in ws["C2":"C7"]:
+                    for cell in cell_:
+                        cell.alignment = Alignment(vertical="center")
                         cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
 
-            ColumnDimension(ws, bestFit=True)
+                for i_, row in enumerate(ws.rows):
+                    for cell_ in row:
+                        if i_ == 9:
+                            if cell_.value in ["공통"]:
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                            elif cell_.value in ["연속형"]:
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="f4b084")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                            elif cell_.value in ["범주형"]:
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="9bc2e6")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                            elif cell_.value in ["비고"]:
+                                ws.merge_cells(f"V1:V2")
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="bfbfbf")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                        elif i_ == 10:
+                            if cell_.value in self.RelCategory["공통"] + self.RelCategory["비고"]:
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="d9d9d9")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                            elif cell_.value in self.RelCategory["연속형"]:
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="f8cbad")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                            elif cell_.value in self.RelCategory["범주형"]:
+                                cell = ws[cell_.coordinate]
+                                cell.fill = PatternFill("solid", fgColor="bdd7ee")
+                                cell.alignment = Alignment(horizontal="center", vertical="center")
+                        elif i_ >= 11:
+                            cell = ws[cell_.coordinate]
+                            cell.alignment = Alignment(vertical="center", wrap_text=True)
+                            cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+
+                ColumnDimension(ws, bestFit=True)
+
+                self.logger.info(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 서식 편집 완료")
+
+            except:
+                self.logger.error(traceback.format_exc())
+                self.logger.error(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 서식 편집 실패")
+                pass
 
         wb.save(OutputPath)
         self.logger.info(f"{self.colorSetting['green']}[Step 6] 데이터 QC 결과 저장 작업 완료{self.colorSetting['reset']}")
