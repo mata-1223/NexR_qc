@@ -37,7 +37,7 @@ pip install NexR_qc
 │   ├── QualityCheck_yyyymmdd_hhmmss.log
 │   ├── ...
 ├── output/
-│   └── QC결과서.xlsx
+│   └── QC결과서_yyyymmdd_hhmmss.xlsx
 └── config.json
 ``` 
 <br>
@@ -83,4 +83,8 @@ Process.save()
 ### Output
 * 결과 파일 경로: output/QC_결과서.xlsx
 * 예시
+1) 예시 1: 테이블 리스트 시트
+![NexR_qc_Info_003](https://github.com/mata-1223/NexR_qc/assets/131343466/54605ebe-d45c-4ba9-b219-dd177e08a6b7)
+
+2) 예시 2: 데이터 별 QC 수행 결과 시트
 ![NexR_qc_Info_001](https://github.com/mata-1223/NexR_qc/assets/131343466/a1613944-4812-40a2-9ec3-6452c104a96b)

@@ -2,7 +2,7 @@ from NexR_qc.QualityCheck import *
 
 PathDict = {}
 PathDict["ROOT"] = os.getcwd()
-PathDict["DATA"] = os.path.join(PathDict["ROOT"], "data")
+PathDict["DATA"] = os.path.join(PathDict["ROOT"], "data", "data1")
 
 DataDict = {}
 for path in os.listdir(PathDict["DATA"]):

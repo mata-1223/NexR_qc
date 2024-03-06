@@ -1,4 +1,3 @@
-import argparse
 import copy
 import datetime
 import json
@@ -33,7 +32,7 @@ class QualityCheck:
 
         self.colorSetting = {"grey": "\x1b[38;20m", "blue": "\033[34m", "green": "\033[32m", "yellow": "\x1b[33;20m", "red": "\x1b[31;20m", "bold_red": "\x1b[31;1m", "reset": "\x1b[0m"}
 
-        self.DataDict = DataDict
+        self.DataDict = {unicodedata.normalize("NFC", k): v for k, v in DataDict.items()}
 
         for folder in self.PATH.keys():
             # 구성 폴더가 없을 경우, 생성
@@ -162,7 +161,7 @@ class QualityCheck:
             data = self.DataDict[data_name]["DATA"]
 
             # 테이블 정의서 정보 획득
-            self.logger.info(f"테이블 정의서 정보 확인 시작")
+            self.logger.info(f"테이블 정의서 내 {data_name} 정보 확인 시작")
             if self.DocumentDict["테이블정의서"]["EXIST"] == True:
                 table_document = self.DocumentDict["테이블정의서"]["DATA"]
                 if data_name in table_document["테이블 영문명"].values:
@@ -204,10 +203,10 @@ class QualityCheck:
                     ],
                 )
 
-            self.logger.info(f"테이블 정의서 정보 확인 완료")
+            self.logger.info(f"테이블 정의서 내 {data_name} 정보 확인 완료")
 
             # 컬럼 정의서 & 코드 정의서 정보 획득
-            self.logger.info(f"코드 정의서 정보 확인 시작")
+            self.logger.info(f"코드 정의서 내 {data_name} 정보 확인 시작")
             if self.DocumentDict["코드정의서"]["EXIST"] == True:
                 code_document = self.DocumentDict["코드정의서"]["DATA"]
                 code_document.columns = map(lambda x: x.replace("\n", " "), list(code_document.columns))
@@ -216,9 +215,9 @@ class QualityCheck:
                 code_document = None
                 code_values = None
 
-            self.logger.info(f"코드 정의서 정보 확인 완료")
+            self.logger.info(f"코드 정의서 내 {data_name} 정보 확인 완료")
 
-            self.logger.info(f"컬럼 정의서 정보 확인 시작")
+            self.logger.info(f"컬럼 정의서 내 {data_name} 정보 확인 시작")
             for col in data.columns:
                 self.InfoDict[data_name]["Column"][col] = {}
 
@@ -238,14 +237,14 @@ class QualityCheck:
                     self.logger.info(f"컬럼 정의서에 {data_name} 테이블의 컬럼 정보가 존재합니다.")
                     for col in data.columns:
                         if col.upper() in column_document.loc[:, "컬럼 영문명"].values:
-                            self.logger.info(f"컬럼 정의서에 {col} 컬럼 정보가 존재합니다.")
+                            self.logger.info(f"컬럼 정의서에 {data_name} 테이블의 {col} 컬럼 정보가 존재합니다.")
                             self.InfoDict[data_name]["Column"][col]["컬럼 영문명"] = col
                             self.InfoDict[data_name]["Column"][col]["컬럼 한글명"] = column_document.loc[column_document["컬럼 영문명"] == col.upper(), "컬럼 한글명"].values[0]
                             self.InfoDict[data_name]["Column"][col]["데이터 타입"] = "datetime" if col in self.DataDict[data_name]["TIMECOL"] else column_document.loc[column_document["컬럼 영문명"] == col.upper(), "데이터 타입"].values[0]
                             self.InfoDict[data_name]["Column"][col]["코드대분류"] = column_document.loc[column_document["컬럼 영문명"] == col.upper(), "코드대분류"].values[0]
                             self.InfoDict[data_name]["Column"][col]["코드값"] = [val for val in code_document.loc[(code_document.loc[:, "코드 대분류"] == self.InfoDict[data_name]["Column"][col]["코드대분류"]), "코드값"].values if val is not np.nan] if self.InfoDict[data_name]["Column"][col]["코드대분류"] in code_values else None
                         else:
-                            self.logger.info(f"컬럼 정의서에 {col} 컬럼 정보가 존재하지 않습니다.")
+                            self.logger.info(f"컬럼 정의서에 {data_name} 테이블의 {col} 컬럼 정보가 존재하지 않습니다.")
                 else:
                     self.logger.info(f"컬럼 정의서에 {data_name} 테이블의 컬럼 정보가 존재하지 않습니다.")
             else:
@@ -312,6 +311,7 @@ class QualityCheck:
             for idx in self.InfoDict[data_name]["Result"].keys():
                 self.InfoDict[data_name]["Result"][idx]["범주형"] = {}
                 col = self.InfoDict[data_name]["Result"][idx]["공통"]["컬럼 영문명"]
+                colData = data[col].dropna()
 
                 # 범주형 영역 초기값
                 self.InfoDict[data_name]["Result"][idx]["범주형"]["범주수"] = None  # 범주수
@@ -324,15 +324,15 @@ class QualityCheck:
                 self.InfoDict[data_name]["Result"][idx]["범주형"]["%최빈값"] = None  # %최빈값
 
                 if any(keyword in self.InfoDict[data_name]["Result"][idx]["공통"]["데이터 타입"] for keyword in ["object", "char", "varchar", "datetime"]):
-                    self.InfoDict[data_name]["Result"][idx]["범주형"]["범주수"] = "{:,}".format(data[col].nunique(dropna=True))  # 범주수
+                    self.InfoDict[data_name]["Result"][idx]["범주형"]["범주수"] = "{:,}".format(colData.nunique(dropna=True))  # 범주수
 
-                    if data[col].nunique(dropna=True) <= 5:
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["범주"] = data[col].unique().tolist()  # 범주
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%범주"] = {value_: "{:.3%}".format((data[col].loc[data[col] == value_].shape[0]) / (data.shape[0])) for value_ in data[col].unique().tolist()}  # %범주
+                    if colData.nunique(dropna=True) <= 5:
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["범주"] = colData.dropna().unique().tolist()  # 범주
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%범주"] = {value_: "{:.3%}".format((colData.loc[colData == value_].shape[0]) / (colData.shape[0])) for value_ in colData.unique().tolist()}  # %범주
                     else:
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["범주"] = data[col].unique()[:2].tolist() + ["..."] + data[col].unique()[-2:].tolist()  # 범주
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%범주"] = {value_: "{:.3%}".format((data[col].loc[data[col] == value_].shape[0]) / (data.shape[0])) for value_ in data[col].unique()[:5].tolist()}  # %범주
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%범주"]["그 외"] = "{:.3%}".format((data[col].loc[~(data[col].isin(data[col].unique()[:5].tolist()))].shape[0]) / (data.shape[0]))
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["범주"] = colData.unique()[:2].tolist() + ["..."] + colData.unique()[-2:].tolist()  # 범주
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%범주"] = {value_: "{:.3%}".format((colData.loc[colData == value_].shape[0]) / (colData.shape[0])) for value_ in colData.unique()[:5].tolist()}  # %범주
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%범주"]["그 외"] = "{:.3%}".format((colData.loc[~(colData.isin(colData.unique()[:5].tolist()))].shape[0]) / (colData.shape[0]))
 
                     if self.InfoDict[data_name]["Column"][col]["코드값"] is not None:
                         _ = [val for val in self.InfoDict[data_name]["Result"][idx]["범주형"]["범주"] if val not in self.InfoDict[data_name]["Column"][col]["코드값"]]
@@ -344,14 +344,14 @@ class QualityCheck:
                             self.InfoDict[data_name]["Result"][idx]["범주형"]["정의된 범주 외"] = _
                         self.InfoDict[data_name]["Result"][idx]["범주형"]["정의된 범주 외 수"] = len(_)
 
-                    if len(data[col].mode(dropna=True).values.tolist()) <= 3:
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값"] = data[col].mode(dropna=True).values.tolist()  # 최빈값
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값 수"] = {mode_: "{:,}".format(data[col].loc[data[col] == mode_].shape[0]) for mode_ in data[col].mode(dropna=True).values.tolist()}  # 최빈값 수
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%최빈값"] = {mode_: "{:.2%}".format((data[col].loc[data[col] == mode_].shape[0]) / (data.shape[0])) for mode_ in data[col].mode(dropna=True).values.tolist()}  # %최빈값
+                    if len(colData.mode(dropna=True).values.tolist()) <= 3:
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값"] = colData.mode(dropna=True).values.tolist()  # 최빈값
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값 수"] = {mode_: "{:,}".format(colData.loc[colData == mode_].shape[0]) for mode_ in colData.mode(dropna=True).values.tolist()}  # 최빈값 수
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%최빈값"] = {mode_: "{:.2%}".format((colData.loc[colData == mode_].shape[0]) / (colData.shape[0])) for mode_ in colData.mode(dropna=True).values.tolist()}  # %최빈값
                     else:
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값"] = data[col].mode(dropna=True).values.tolist()[:2] + ["..."]  # 최빈값
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값 수"] = {mode_col: "{:,}".format(data[col].loc[data[col] == mode_col].shape[0]) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]}  # 최빈값 수
-                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%최빈값"] = {mode_col: "{:.2%}".format((data[col].loc[data[col] == mode_col].shape[0]) / (data.shape[0])) for mode_col in data[col].mode(dropna=True).values.tolist()[:2]}  # %최빈값
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값"] = colData.mode(dropna=True).values.tolist()[:2] + ["..."]  # 최빈값
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["최빈값 수"] = {mode_col: "{:,}".format(colData.loc[colData == mode_col].shape[0]) for mode_col in colData.mode(dropna=True).values.tolist()[:2]}  # 최빈값 수
+                        self.InfoDict[data_name]["Result"][idx]["범주형"]["%최빈값"] = {mode_col: "{:.2%}".format((colData.loc[colData == mode_col].shape[0]) / (colData.shape[0])) for mode_col in colData.mode(dropna=True).values.tolist()[:2]}  # %최빈값
 
             # Step 5-4: 비고 영역 QC 수행
             for idx in self.InfoDict[data_name]["Result"].keys():
@@ -391,7 +391,10 @@ class QualityCheck:
             SubCol2 += self.RelCategory[key1]
 
         ColList = [SubCol1, SubCol2]
-        OutputPath = os.path.join(self.PATH["OUTPUT"], "QC결과서.xlsx")
+
+        OutputCreatedTime = datetime.today()
+        OutputCreatedTime = OutputCreatedTime.strftime("%Y%m%d_%H%M%S")
+        OutputPath = os.path.join(self.PATH["OUTPUT"], f"QC결과서_{OutputCreatedTime}.xlsx")
 
         for data_name in self.DataDict.keys():
             ResultList = []
@@ -572,7 +575,8 @@ class QualityCheck:
 
                 ColumnDimension(ws, bestFit=True)
 
-                self.logger.info(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 서식 편집 완료")
+                if any([(idx + 1) % 10 == 0, (idx + 1) == len(self.ResultDict.keys())]):
+                    self.logger.info(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 생성 완료")
 
             except:
                 self.logger.error(traceback.format_exc())
