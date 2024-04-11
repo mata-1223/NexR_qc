@@ -76,7 +76,7 @@ class QualityCheck:
         self.logger.info(f"총 {len(self.DataDict):,} 개의 데이터 파일이 존재합니다.")
 
         # 날짜 혹은 시간 컬럼 관련 추가 정보 입력 필요 여부값 확인
-        self.config["DateTimeInfoQuestion_YN"] = True if input(f"""{self.colorSetting["yellow"]}각 테이블 내 날짜 혹은 시간 관련 컬럼에 대한 추가 정보 입력이 필요한 경우 Y, 추가 정보 입력이 필요 없는 경우는 N을 입력해주세요 (Y/N):{self.colorSetting["reset"]} """) == "Y" else False
+        self.config["DateTimeInfoQuestion_YN"] = True if input(f"""{self.colorSetting['yellow']}각 테이블 내 날짜 혹은 시간 관련 컬럼에 대한 추가 정보 입력이 필요한 경우 Y, 추가 정보 입력이 필요 없는 경우는 N을 입력해주세요 (Y/N):{self.colorSetting['reset']} """) in ["Y", "y"] else False
 
         for name, data in self.DataDict.items():
             self.DataDict[name] = {}
@@ -459,7 +459,7 @@ class QualityCheck:
                 )
 
                 if any([(idx + 1) % 10 == 0, (idx + 1) == len(self.ResultDict.keys())]):
-                    self.logger.info(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 생성 완료")
+                    self.logger.info(f"{idx + 1} / {len(self.ResultDict.keys())} 번째 엑셀 시트 생성 완료")
 
         # Step 6-2: 저장한 Excel 파일 서식 편집
         wb = load_workbook(OutputPath)
@@ -607,11 +607,11 @@ class QualityCheck:
                 ColumnDimension(ws, bestFit=True)
 
                 if any([(idx + 1) % 10 == 0, (idx + 1) == len(self.ResultDict.keys())]):
-                    self.logger.info(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 생성 완료")
+                    self.logger.info(f"{idx + 1} / {len(self.ResultDict.keys())} 번째 엑셀 시트 서식 편집 완료")
 
             except:
                 self.logger.error(traceback.format_exc())
-                self.logger.error(f"[{idx + 1} / {len(self.ResultDict.keys())}] 번째 엑셀 시트 서식 편집 실패")
+                self.logger.error(f"{idx + 1} / {len(self.ResultDict.keys())} 번째 엑셀 시트 서식 편집 실패")
                 pass
 
         wb.save(OutputPath)
